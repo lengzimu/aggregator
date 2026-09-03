@@ -1,0 +1,329 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+import Card from './Card.astro';
+import FilterNav from './FilterNav.astro';
+import Pagination from './Pagination.astro';
+import AffiliateBanner from './AffiliateBanner.astro';
+import SeoData from './SeoData.astro';
+import AdSlot from './AdSlot.astro';
+import { byLang, sortEntries, metricsOf, fmtDate, PAGE_SIZE, listBasePath, pickEditorPicks, metricLine } from '../lib/content.ts';
+import {
+  useTranslations,
+  platformName,
+  platformSlug,
+  localizedPath,
+  type Lang,
+} from '../i18n/ui.ts';
+
+interface Props {
+  lang: Lang;
+  type: 'videos' | 'comics' | 'novels';
+  /** 平台原名（如 'Webtoon'）；未传 = 全部平台 */
+  platform?: string;
+  /** 当前页码，1 起 */
+  page?: number;
+}
+
+const { lang, type, platform, page = 1 } = Astro.props;
+const t = useTranslations(lang);
+
+const titleKey = { videos: 'nav.videos', comics: 'nav.comics', novels: 'nav.novels' } as const;
+const typeName = t(titleKey[type]);
+
+const all = await getCollection(type);
+const langEntries = byLang(all, lang);
+
+/** 平台清单始终基于「该语种的全部条目」，保证切换平台时入口不消失 */
+const platforms = [...new Set(langEntries.map((e) => e.data.platform))];
+
+// 平台筛选（静态页维度；前端 JS 筛选仍然保留，仅作交互增强）
+const filtered = platform ? langEntries.filter((e) => e.data.platform === platform) : langEntries;
+const sorted = sortEntries(filtered, 'latest');
+
+// 分页
+const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+const currentPage = Math.min(Math.max(1, page), totalPages);
+const entries = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+// 全站最新的指标快照时间 —— 向读者与搜索引擎证明数据被持续维护（freshness 信号）
+const latestCapture = langEntries.reduce<Date | null>((acc, e) => {
+  const c = metricsOf(e).capturedAt;
+  if (!c) return acc;
+  return !acc || c.valueOf() > acc.valueOf() ? c : acc;
+}, null);
+
+// 每分类的原创引言：关键词丰富、强调「不托管内容、直达正版」的差异化定位，避免被谷歌判 thin/affiliate content
+const intros = {
+  zh: {
+    videos:
+      'HubLinks 为你精选来自抖音、TikTok 等平台的高热度短视频，所有条目均经过播放量与涨粉速度双重筛选。我们不做任何缓存或转码，点击卡片即直达创作者原页，既保护版权也避免低质搬运。无论你想追热门挑战、发现新晋博主，还是寻找特定品类的爆款内容，这里都是最干净的入口。',
+    comics:
+      '我们聚合 Webtoon、Tapas、腾讯动漫、漫客栈、快看等海内外正版漫画平台的高分与飙升作品，按读者评分、更新活跃度与榜单排名综合排序。HubLinks 只做索引与导航，所有漫画均在原站正版阅读，绝无盗版镜像。从韩系条漫到国漫精品，从每日连载到完结神作，一站直达。',
+    novels:
+      'HubLinks 汇聚 Webnovel、Wattpad、Wuxiaworld 与番茄小说等平台的高评分、快增长连载佳作，依据读者口碑、更新频率与热度趋势精选。每条都直达官方正版阅读页，无盗版、无广告弹窗干扰。无论你偏爱系统流、言情、玄幻还是同人，都能在这里找到持续更新的优质书单。',
+  },
+  en: {
+    videos:
+      'HubLinks curates the most-watched short videos from Douyin, TikTok and other official platforms, filtered by both total views and follower growth. We never cache or re-encode anything — every card opens the creator\'s original page, protecting copyright and avoiding low-quality reuploads. Whether you\'re chasing viral challenges, discovering breakout creators, or hunting category hits, this is the cleanest entry point.',
+    comics:
+      'We aggregate top-rated and fastest-rising comics from official platforms like Webtoon, Tapas, Tencent Comics, Mankezhai and KuaiKan, ranked by reader rating, update cadence and chart position. HubLinks only indexes and links — every title is read on its original, legitimate platform with no piracy mirrors. From Korean webtoons to Chinese manhua, from daily serials to completed masterpieces, one stop to the source.',
+    novels:
+      'HubLinks brings together highly-rated, fast-growing serial novels from Webnovel, Wattpad, Wuxiaworld, Fanqie and other official platforms, hand-picked by reader acclaim, update frequency and momentum. Every link goes straight to the legitimate reading page — no piracy, no intrusive pop-ups. Whether you love system-litRPG, romance, xianxia or fan-fiction, you\'ll find an ever-refreshing reading list here.',
+  },
+} as const;
+
+// 平台页：标题与引言都带上平台名，避免与列表首页「标题重复」
+const platformLabel = platform ? platformName(platform, lang) : '';
+const pageTitle = platform
+  ? lang === 'en'
+    ? `${typeName} on ${platformLabel}`
+    : `${platformLabel}${typeName}`
+  : typeName;
+
+const introText = platform
+  ? t('list.platformIntro')
+      .replace('{platform}', platformLabel)
+      .replace('{type}', typeName)
+  : intros[lang][type];
+
+const metaDescription = platform
+  ? lang === 'en'
+    ? `Hand-picked ${typeName.toLowerCase()} on ${platformLabel}. Click any card to open the official source — nothing is hosted here.`
+    : `精选 ${platformLabel} 的正版${typeName}，点击卡片直达原站，本站不存储任何内容。`
+  : lang === 'en'
+    ? `Hand-picked ${typeName.toLowerCase()} from official platforms. Click any card to open the source — nothing is hosted here.`
+    : `精选正版平台的${typeName}，点击卡片直达原站，本站不存储任何内容。`;
+
+const emptyText =
+  lang === 'en'
+    ? 'No entries in this language yet. Try switching to 中文.'
+    : '该语种暂无内容，可切换到 English 查看英文条目。';
+
+const basePath = listBasePath(lang, type, platform);
+
+/**
+ * 语种对应页路径（hreflang 用）。
+ *
+ * 平台页 / 分页页在另一语种下未必存在（英文站没有「快看」条目，条目少于 PAGE_SIZE 时
+ * 也没有第 2 页）。hreflang 指向 404 会让 Google 丢弃整组标注，所以这里逐级回退：
+ *   平台页 → 该语种无此平台 ⇒ 回退到该分类列表页
+ *   分页页 → 该语种没这么多页 ⇒ 回退到列表第 1 页
+ */
+function countFor(l: Lang, plat?: string): number {
+  const list = byLang(all, l);
+  return plat ? list.filter((e) => e.data.platform === plat).length : list.length;
+}
+
+function alternateFor(l: Lang): string {
+  const hasPlatform = platform && countFor(l, platform) > 0;
+  const base = hasPlatform ? listBasePath(l, type, platform) : localizedPath(`/${type}/`, l);
+  const total = Math.max(1, Math.ceil(countFor(l, platform) / PAGE_SIZE));
+  return currentPage > 1 && currentPage <= total ? `${base}page/${currentPage}/` : base;
+}
+
+const alternates = { zh: alternateFor('zh'), en: alternateFor('en') };
+
+// 面包屑（UI + 结构化数据共用）
+const crumbs = [
+  { name: lang === 'en' ? 'Home' : '首页', url: lang === 'en' ? '/en/' : '/' },
+  { name: typeName, url: localizedPath(`/${type}/`, lang) },
+  ...(platform ? [{ name: platformLabel, url: basePath }] : []),
+];
+
+// ItemList 结构化数据：条目跳转页（与原站 302 对应）
+const itemList = entries.map((e) => ({
+  title: e.data.title,
+  url: localizedPath(`/${type}/${e.id}/`, lang),
+}));
+
+// ===== 相关专题内链：列表页 → 专题页，让爬虫走通全站 =====
+const relatedEditorial = (await getCollection('editorial'))
+  .filter((e) => (e.data.language ?? 'zh') === lang && e.data.type === type)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+  .slice(0, 3);
+const editorialBase = localizedPath('/editorial/', lang);
+
+// ===== 编辑精选（Editor's Picks）：基于源平台 metrics 动态计算 Top N，且必须带人工 review =====
+const TOP_N = 5;
+const picks = pickEditorPicks(filtered, { limit: TOP_N });
+// 兜底：若当前范围（如某个平台）没有带 review 的条目，退而求其次展示纯指标 Top N，避免板块空悬
+const ranked = picks.length > 0 ? picks : pickEditorPicks(filtered, { limit: TOP_N, requireReview: false });
+
+const picksHeading = lang === 'en' ? `Editor's Picks` : '编辑精选';
+const picksSub =
+  lang === 'en'
+    ? `Top ${ranked.length} ${type === 'videos' ? 'videos' : type === 'comics' ? 'comics' : 'novels'} right now`
+    : `当前最值得看的 ${typeName} Top ${ranked.length}`;
+const methodology =
+  lang === 'en'
+    ? 'Ranked by a blend of reader rating, 7-day growth and chart position, refreshed as data updates. We only include whitelisted official platforms and verify every metric, so each title here is worth your click.'
+    : '依据读者评分、近 7 日增长与平台榜单名次综合排序，随数据实时刷新。我们只收录白名单内正版平台并核对每项指标，确保榜上每一部都值得点开。';
+---
+
+<Layout
+  title={`${pageTitle} | HubLinks`}
+  description={metaDescription}
+  lang={lang}
+  alternates={alternates}
+>
+  <SeoData lang={lang} crumbs={crumbs} entries={itemList} />
+
+  <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+    <!-- 面包屑 -->
+    <nav aria-label="Breadcrumb" class="mb-4 text-xs text-slate-400">
+      {
+        crumbs.map((c, i) => (
+          <>
+            {i > 0 && <span class="px-1">/</span>}
+            {i === crumbs.length - 1 ? (
+              <span class="text-slate-600" aria-current="page">{c.name}</span>
+            ) : (
+              <a href={c.url} class="hover:text-brand-600">{c.name}</a>
+            )}
+          </>
+        ))
+      }
+    </nav>
+
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-slate-900">{pageTitle}</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{introText}</p>
+      <p class="mt-1 text-xs text-slate-400">
+        {
+          lang === 'en'
+            ? `${sorted.length} ${sorted.length === 1 ? 'title' : 'titles'} · Click a card to open the official source. Nothing is hosted here.`
+            : `共 ${sorted.length} 部 · 点击卡片将跳转到原站，本站不存储任何内容。`
+        }
+      </p>
+      {
+        latestCapture && (
+          <p class="mt-0.5 text-xs text-slate-400">
+            {lang === 'en' ? 'Metrics last verified' : '热度数据最后核对'} {fmtDate(latestCapture)}
+          </p>
+        )
+      }
+    </div>
+
+    <!-- 平台静态入口：前端 JS 筛选爬虫看不到，这一行真实 <a> 才是可爬的筛选维度 -->
+    {
+      platforms.length > 1 && (
+        <nav aria-label="Platforms" class="mb-5 flex flex-wrap items-center gap-2 text-xs">
+          <span class="text-slate-400">{t('list.browseByPlatform')}</span>
+          <a
+            href={localizedPath(`/${type}/`, lang)}
+            class:list={[
+              'rounded-full border px-3 py-1 transition',
+              !platform
+                ? 'border-brand-600 bg-brand-600 text-white'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700',
+            ]}
+          >
+            {t('filter.all')}
+          </a>
+          {platforms.map((p) => (
+            <a
+              href={listBasePath(lang, type, p)}
+              class:list={[
+                'rounded-full border px-3 py-1 transition',
+                platform === p
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700',
+              ]}
+            >
+              {platformName(p, lang)}
+            </a>
+          ))}
+        </nav>
+      )
+    }
+
+    <AdSlot label="Advertisement" />
+
+    <!--
+      平台页只展示该平台的条目，JS 平台按钮全部无效，
+      因此传空数组只保留「全部」与排序控件，避免出现点了没反应的死按钮。
+    -->
+    <FilterNav platforms={platform ? [] : platforms} lang={lang} />
+
+    {
+      entries.length === 0 ? (
+        <p class="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+          {emptyText}
+        </p>
+      ) : (
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {entries.map((entry) => <Card entry={entry} type={type} lang={lang} />)}
+        </div>
+      )
+    }
+
+    <Pagination lang={lang} basePath={basePath} page={currentPage} totalPages={totalPages} />
+
+    <!-- 内链：列表页 → 专题页 -->
+    {
+      relatedEditorial.length > 0 && (
+        <section class="mt-10 rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 class="mb-3 text-sm font-semibold text-slate-700">{t('list.relatedEditorial')}</h2>
+          <ul class="space-y-2">
+            {relatedEditorial.map((e) => (
+              <li>
+                <a href={`${editorialBase}${e.slug}/`} class="group block">
+                  <span class="text-sm font-medium text-slate-800 group-hover:text-brand-600">
+                    {e.data.title}
+                  </span>
+                  <span class="mt-0.5 block text-xs leading-5 text-slate-500">
+                    {e.data.description}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    {/* 编辑精选：源平台指标 + 人工文案，抗薄内容 + 站内跳转 */}
+    {
+      ranked.length > 0 && (
+        <section class="mt-12 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+          <div class="mb-1 flex items-baseline gap-3">
+            <h2 class="text-xl font-bold text-slate-900">{picksHeading}</h2>
+            <span class="text-sm text-brand-600">{picksSub}</span>
+          </div>
+          <p class="mb-5 max-w-3xl text-sm leading-6 text-slate-600">{methodology}</p>
+          <ol class="space-y-3">
+            {ranked.map((e, i) => (
+              <li class="flex flex-col gap-1 rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:gap-4">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
+                  {i + 1}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <a
+                    href={`/${type}/${e.id}/`}
+                    class="block truncate font-semibold text-slate-900 hover:text-brand-600"
+                  >
+                    {e.data.title}
+                  </a>
+                  {e.data.review && (
+                    <p class="mt-0.5 text-xs leading-5 text-slate-600">{e.data.review}</p>
+                  )}
+                  <p class="mt-0.5 truncate text-[11px] text-slate-400">
+                    <span class="font-medium text-slate-600">{e.data.platform}</span>
+                    <span class="px-1.5 text-slate-300">·</span>
+                    <span>{metricLine(e, lang)}</span>
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )
+    }
+
+    <div class="mt-10">
+      <AdSlot label="Advertisement" />
+      <AffiliateBanner lang={lang} />
+    </div>
+  </div>
+</Layout>

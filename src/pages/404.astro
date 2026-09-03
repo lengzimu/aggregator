@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getLangFromUrl, localizedPath, useTranslations } from '../i18n/ui.ts';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+---
+
+<Layout title={`404 · ${t('notfound.title')} | HubLinks`} lang={lang}>
+  <div class="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center sm:px-6">
+    <p class="text-7xl font-extrabold text-brand-600">404</p>
+    <h1 class="mt-4 text-2xl font-bold text-slate-900">{t('notfound.title')}</h1>
+    <p class="mt-2 text-slate-500">{t('notfound.desc')}</p>
+    <div class="mt-8 flex gap-3">
+      <a
+        href={localizedPath('/', lang)}
+        class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+      >
+        {t('notfound.home')}
+      </a>
+      <a
+        href={localizedPath('/search/', lang)}
+        class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+      >
+        {t('nav.search')}
+      </a>
+    </div>
+  </div>
+</Layout>

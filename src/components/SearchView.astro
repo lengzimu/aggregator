@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Search from './Search.astro';
+import { localizedPath, useTranslations, type Lang } from '../i18n/ui.ts';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const query = Astro.url.searchParams.get('q') ?? '';
+
+const title = lang === 'en' ? 'Search | HubLinks' : '搜索 | HubLinks';
+const description =
+  lang === 'en'
+    ? 'Static full-text search powered by Pagefind. No backend required.'
+    : '基于 Pagefind 的静态全文搜索，无需后端。';
+---
+
+<Layout title={title} description={description} lang={lang} alternatePath="/search/">
+  <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+    <div class="mb-8 text-center">
+      <h1 class="text-2xl font-bold text-slate-900">{t('search.title')}</h1>
+      <p class="mt-1 text-sm text-slate-500">{description}</p>
+    </div>
+    <Search initialQuery={query} lang={lang} />
+  </div>
+</Layout>

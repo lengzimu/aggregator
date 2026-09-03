@@ -1,0 +1,60 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getStaticPage, type StaticPageKey } from '../i18n/pages.ts';
+import { defaultLang, type Lang } from '../i18n/ui.ts';
+
+interface Props {
+  lang: Lang;
+  pageKey: StaticPageKey;
+  /** 用于 hreflang 的路径，例如 /about/ */
+  path: string;
+}
+
+const { lang, pageKey, path } = Astro.props;
+const page = getStaticPage(pageKey, lang);
+
+const description =
+  lang === 'en'
+    ? `${page.title} — HubLinks is a link index service that hosts no media content.`
+    : `${page.title} —— HubLinks 是纯链接索引服务，不托管任何媒体内容。`;
+---
+
+<Layout
+  title={`${page.title} | HubLinks`}
+  description={description}
+  lang={lang}
+  alternatePath={path}
+>
+  <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+    <header class="mb-10 border-b border-slate-200 pb-8">
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900">{page.title}</h1>
+      <p class="mt-3 text-base leading-7 text-slate-600">{page.intro}</p>
+      <p class="mt-3 text-xs font-medium uppercase tracking-wide text-slate-400">{page.updated}</p>
+    </header>
+
+    <div class="space-y-10">
+      {
+        page.sections.map((section) => (
+          <section>
+            <h2 class="text-lg font-semibold text-slate-900">{section.heading}</h2>
+
+            {section.paragraphs?.map((p) => (
+              <p class="mt-3 text-sm leading-7 text-slate-600">{p}</p>
+            ))}
+
+            {section.bullets && (
+              <ul class="mt-3 space-y-2">
+                {section.bullets.map((b) => (
+                  <li class="flex gap-2.5 text-sm leading-7 text-slate-600">
+                    <span class="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-brand-500"></span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))
+      }
+    </div>
+  </div>
+</Layout>

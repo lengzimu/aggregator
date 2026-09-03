@@ -1,0 +1,84 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { useTranslations, platformName, type Lang } from '../i18n/ui.ts';
+
+interface Props {
+  entry: CollectionEntry<'videos' | 'comics' | 'novels'>;
+}
+
+const { entry } = Astro.props;
+const data = entry.data;
+const target = data.sourceUrl;
+const lang: Lang = (data.language ?? 'zh') as Lang;
+const t = useTranslations(lang);
+
+const by = 'creator' in data ? data.creator : data.author;
+const htmlLang = lang === 'en' ? 'en' : 'zh-CN';
+const platform = platformName(data.platform, lang);
+---
+
+<!doctype html>
+<html lang={htmlLang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, follow" />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={target} />
+    <title>{t('redirect.title')} · {data.title}</title>
+    <meta
+      name="description"
+      content={
+        lang === 'en'
+          ? `Redirecting to ${data.title} by ${by} on ${platform}.`
+          : `正在跳转到 ${platform} 上的「${data.title}」，作者 ${by}。`
+      }
+    />
+  </head>
+  <body data-redirect={target} data-pagefind-ignore class="redirect-page">
+    <div style="max-width: 32rem; padding: 1.5rem; text-align: center;">
+      <div style="margin-bottom: 1rem;">
+        <span
+          style="display:inline-block; width:1.75rem; height:1.75rem; border:2px solid #cbd5e1; border-top-color:#4f46e5; border-radius:50%; animation: redirect-spin 0.8s linear infinite;"
+          aria-hidden="true"></span>
+      </div>
+
+      <h1 style="margin:0 0 .5rem; font-size:1.125rem; font-weight:600; color:#0f172a;">
+        {t('redirect.title')}
+      </h1>
+      <p style="margin:0 0 .25rem; font-size:.875rem; color:#475569;">{t('redirect.desc')}</p>
+      <p style="margin:0; font-size:.875rem; font-weight:600; color:#4f46e5;">{platform}</p>
+
+      <p class="redirect-fallback" style="margin-top:1.25rem;">
+        {t('redirect.manual')}
+        <br />
+        <a href={target} rel="noopener noreferrer" style="display:inline-block; margin-top:.5rem;">
+          {t('redirect.target')} →
+        </a>
+      </p>
+
+      <p style="margin-top:1.5rem; font-size:.75rem; color:#94a3b8;">{t('redirect.notice')}</p>
+    </div>
+
+    <noscript>
+      <p class="redirect-fallback">
+        {t('redirect.title')}: <a href={target} rel="noopener noreferrer">{target}</a>
+      </p>
+    </noscript>
+
+    <style>
+      @keyframes redirect-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+
+    <script>
+      const url = document.body.getAttribute('data-redirect');
+      if (url) {
+        window.location.replace(url);
+      }
+    </script>
+  </body>
+</html>

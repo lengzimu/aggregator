@@ -1,0 +1,59 @@
+name: Daily Harvest
+
+# 定时自动采集：把各正版平台榜单 TOP 内容写入 data/pending/ 待人工复核。
+# 注意：本流程只提交 pending，不自动上线——晋升需人工运行 npm run promote。
+on:
+  schedule:
+    # 每天 UTC 13:00（北京时间 21:00），避开与链接检查同一时刻
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 不装 Astro/Pagefind，采集脚本只用 Node 内置模块，省时
+      - name: Harvest to pending
+        run: node scripts/harvest.mjs
+
+      - name: Commit pending (if any)
+        run: |
+          git add data/pending/
+          if git diff --cached --quiet; then
+            echo "无新增待审核内容"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: daily harvest -> data/pending"
+            git push
+          fi
+
+      # 可选：自动审核晋升。
+      # 默认关闭——保持"采集绝不自动上线"的安全默认。
+      # 如需启用，在仓库 Settings → Secrets and variables → Actions → Variables
+      # 新建 Repository variable：AUTO_PROMOTE = 1，下一轮采集即会自动晋升"置信可过"的条目。
+      # 任何需人眼判断正版/封面/作者的条目仍留在 data/pending/ 等人工复核。
+      - name: Auto-promote confident entries (opt-in)
+        if: ${{ vars.AUTO_PROMOTE == '1' }}
+        run: |
+          node scripts/promote.mjs --auto --apply
+          git add src/content/
+          if git diff --cached --quiet; then
+            echo "无可自动晋升条目"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: auto-promote confident pending entries"
+            git push
+          fi

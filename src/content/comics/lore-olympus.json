@@ -1,0 +1,26 @@
+{
+  "title": "Lore Olympus",
+  "author": "Rachel Smythe",
+  "platform": "Webtoon",
+  "sourceUrl": "https://www.webtoons.com/en/romance/lore-olympus/list?title_no=1320",
+  "coverUrl": "https://picsum.photos/seed/lore-olympus/400/600",
+  "language": "en",
+  "status": "completed",
+  "tags": [
+    "Romance",
+    "Mythology",
+    "Drama"
+  ],
+  "review": "Greek myth retold as a pastel-coloured office romance. The art carries the mood better than the plot, so it suits readers who want atmosphere; the pacing sags through the middle third.",
+  "pubDate": "2026-08-18",
+  "origin": "manual",
+  "sourceId": "webtoon:1320",
+  "metrics": {
+    "rating": 9.8,
+    "views": 7400000,
+    "subscribers": 6300000,
+    "growth": 1.1,
+    "rank": 2,
+    "capturedAt": "2026-09-01"
+  }
+}

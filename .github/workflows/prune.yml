@@ -1,0 +1,48 @@
+name: Daily Prune (liveness check & auto-takedown)
+
+# 存活巡检：回抓已上线条目的源站，源站已删除/下架的判定为 dead。
+# 默认只做 dry-run（列出待下架条目，不改动文件）；只有开启仓库变量 PRUNE_AUTO=1 后，
+# 本流程带 --apply 才会真正把 dead 条目移入 removed/ 并提交。
+# 与每日采集(harvest)错开时间，避免同一时刻跑两个定时任务。
+#
+# 启用真实自动下架：仓库 Settings → Secrets and variables → Actions → Variables
+# 新建 Repository variable：PRUNE_AUTO = 1。关闭变量即回到"只巡检、不删"的安全默认。
+on:
+  schedule:
+    # 每天 UTC 14:00（北京时间 22:00）
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 存活巡检。脚本内部按 PRUNE_AUTO 决定 --apply 是否生效：
+      #   - 未设 PRUNE_AUTO        → 即使带 --apply 也强制 dry-run，只输出报告。
+      #   - PRUNE_AUTO=1           → 真实把 dead 条目移入 removed/。
+      # （仅 Node 内置模块，无需装依赖）
+      - name: Prune dead links (dry-run unless PRUNE_AUTO=1)
+        run: node scripts/prune.mjs --apply
+
+      - name: Commit takedowns (if any)
+        run: |
+          git add src/content/ removed/
+          if git diff --cached --quiet; then
+            echo "无下架变动（dry-run 或本轮无 dead 条目）"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: auto-prune dead sources -> removed/"
+            git push
+          fi

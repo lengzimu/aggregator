@@ -1,0 +1,153 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+import Card from './Card.astro';
+import SeoData from './SeoData.astro';
+import { localizedPath, useTranslations, type Lang } from '../i18n/ui.ts';
+import type { AnyEntry } from '../lib/content.ts';
+
+interface Props {
+  lang: Lang;
+  entry: CollectionEntry<'editorial'>;
+}
+
+const { lang, entry } = Astro.props;
+const t = useTranslations(lang);
+const { Content } = await entry.render();
+const data = entry.data;
+
+// 解析本专题引用的条目（在关联分类集合内按 slug 查找）
+let pool: AnyEntry[];
+if (data.type === 'videos') pool = await getCollection('videos');
+else if (data.type === 'comics') pool = await getCollection('comics');
+else pool = await getCollection('novels');
+
+const items = data.entries
+  .map((slug) => pool.find((e) => e.id === slug))
+  .filter((e): e is AnyEntry => Boolean(e));
+
+// 相关专题（同语种、同分类优先，其余兜底）—— 内链，让爬虫走通全站
+const allEditorial = await getCollection('editorial');
+const sameLang = allEditorial
+  .filter((e) => (e.data.language ?? 'zh') === lang && e.slug !== entry.slug)
+  .sort((a, b) => {
+    const aHit = a.data.type === data.type ? 1 : 0;
+    const bHit = b.data.type === data.type ? 1 : 0;
+    if (aHit !== bHit) return bHit - aHit;
+    return b.data.pubDate.valueOf() - a.data.pubDate.valueOf();
+  });
+const related = sameLang.slice(0, 4);
+
+const base = lang === 'en' ? '/en/editorial/' : '/editorial/';
+const typeHref = localizedPath(`/${data.type}/`, lang);
+const typeLabel =
+  data.type === 'videos' ? t('nav.videos') : data.type === 'comics' ? t('nav.comics') : t('nav.novels');
+
+const crumbs = [
+  { name: lang === 'en' ? 'Home' : '首页', url: lang === 'en' ? '/en/' : '/' },
+  { name: t('editorial.title'), url: base },
+  { name: data.title, url: `${base}${entry.slug}/` },
+];
+
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
+const entriesHint = t('editorial.entriesHint');
+---
+
+<Layout title={`${data.title} | HubLinks`} description={data.description} lang={lang}>
+  <SeoData lang={lang} crumbs={crumbs} />
+
+  <article class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    <nav aria-label="Breadcrumb" class="mb-5 text-xs text-slate-400">
+      {
+        crumbs.map((c, i) => (
+          <>
+            {i > 0 && <span class="px-1">/</span>}
+            {i === crumbs.length - 1 ? (
+              <span class="text-slate-600" aria-current="page">{c.name}</span>
+            ) : (
+              <a href={c.url} class="hover:text-brand-600">{c.name}</a>
+            )}
+          </>
+        ))
+      }
+    </nav>
+
+    <header class="mb-8 border-b border-slate-200 pb-6">
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900">{data.title}</h1>
+      <p class="mt-3 text-base leading-7 text-slate-600">{data.description}</p>
+      <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+        <span>{data.author}</span>
+        <span>{t('editorial.published')} {fmt(data.pubDate)}</span>
+        {data.updatedDate && <span>{t('editorial.updated')} {fmt(data.updatedDate)}</span>}
+        <a href={typeHref} class="text-brand-600 hover:text-brand-700">
+          {typeLabel}
+        </a>
+      </div>
+      {
+        data.tags.length > 0 && (
+          <div class="mt-3 flex flex-wrap gap-1.5">
+            {data.tags.map((tag) => (
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">{tag}</span>
+            ))}
+          </div>
+        )
+      }
+    </header>
+
+    {/* 原创赏析正文：本页可索引，这里才是真正贡献「内容量」的地方 */}
+    <div class="prose-hl space-y-4 text-[15px] leading-8 text-slate-700">
+      <Content />
+    </div>
+
+    {
+      items.length > 0 && (
+        <section class="mt-12">
+          <h2 class="mb-1 text-lg font-bold text-slate-900">{t('editorial.included')}</h2>
+          <p class="mb-5 text-xs text-slate-400">{entriesHint}</p>
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {items.map((item) => (
+              <Card entry={item} type={data.type} lang={lang} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      related.length > 0 && (
+        <section class="mt-12 border-t border-slate-100 pt-8">
+          <h2 class="mb-4 text-base font-bold text-slate-900">{t('editorial.related')}</h2>
+          <ul class="space-y-2">
+            {related.map((r) => (
+              <li>
+                <a
+                  href={`${base}${r.slug}/`}
+                  class="flex items-start gap-2 text-sm text-slate-600 hover:text-brand-600"
+                >
+                  <span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-brand-500"></span>
+                  <span>
+                    <span class="font-medium">{r.data.title}</span>
+                    <span class="block text-xs text-slate-400">{r.data.description}</span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    {/* 收录标准页内链：E-E-A-T 证据页，让爬虫与读者都能验证筛选依据 */}
+    <div class="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-6 text-sm">
+      <a href={base} class="font-medium text-brand-600 hover:text-brand-700">
+        {t('editorial.backToList')}
+      </a>
+      <a
+        href={localizedPath('/editorial-policy/', lang)}
+        class="text-slate-500 hover:text-brand-600"
+      >
+        {t('nav.editorialPolicy')} →
+      </a>
+    </div>
+  </article>
+</Layout>

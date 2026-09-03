@@ -1,0 +1,26 @@
+{
+  "title": "Tower of God",
+  "author": "SIU",
+  "platform": "Webtoon",
+  "sourceUrl": "https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95",
+  "coverUrl": "https://picsum.photos/seed/tower-of-god/400/600",
+  "language": "en",
+  "status": "ongoing",
+  "tags": [
+    "Fantasy",
+    "Action",
+    "Adventure"
+  ],
+  "review": "Over six hundred chapters and still running, so it rewards patience more than casual reading. The world-building is the draw; the power scaling gets confusing around season three.",
+  "pubDate": "2026-08-20",
+  "origin": "manual",
+  "sourceId": "webtoon:95",
+  "metrics": {
+    "rating": 9.6,
+    "views": 6200000,
+    "subscribers": 5100000,
+    "growth": 3.2,
+    "rank": 1,
+    "capturedAt": "2026-09-01"
+  }
+}

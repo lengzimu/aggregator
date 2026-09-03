@@ -1,0 +1,34 @@
+{
+  "name": "content-aggregator",
+  "version": "1.0.0",
+  "description": "Overseas content discovery & referral site — a link index for short videos, comics and novels. Zero media storage, pure redirect referral.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && pagefind --site dist && node scripts/generate-redirects.mjs && node scripts/generate-sitemap.mjs",
+    "preview": "astro preview",
+    "check:links": "node scripts/check-links.js",
+    "harvest": "node scripts/harvest.mjs",
+    "harvest:webtoon": "node scripts/harvest.mjs --only webtoon",
+    "import": "node scripts/import.mjs",
+    "promote": "node scripts/promote.mjs --apply",
+    "promote:auto": "node scripts/promote.mjs --auto --apply",
+    "prune": "node scripts/prune.mjs",
+    "prune:apply": "node scripts/prune.mjs --apply",
+    "dedupe": "node scripts/dedupe.mjs",
+    "check:reviews": "node scripts/check-reviews.mjs",
+    "add": "node scripts/add-entry.mjs"
+  },
+  "dependencies": {
+    "astro": "^4.16.18"
+  },
+  "devDependencies": {
+    "@astrojs/tailwind": "^5.1.2",
+    "pagefind": "^1.2.0",
+    "tailwindcss": "^3.4.15"
+  },
+  "engines": {
+    "node": ">=18.17.1"
+  }
+}

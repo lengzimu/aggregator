@@ -1,0 +1,261 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+import Card from './Card.astro';
+import AffiliateBanner from './AffiliateBanner.astro';
+import AdSlot from './AdSlot.astro';
+import { byLang, sortEntries, pickEditorPicks, metricLine } from '../lib/content.ts';
+import { localizedPath, useTranslations, type Lang } from '../i18n/ui.ts';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const [videos, comics, novels] = await Promise.all([
+  getCollection('videos'),
+  getCollection('comics'),
+  getCollection('novels'),
+]);
+
+const latestVideos = sortEntries(byLang(videos, lang), 'latest').slice(0, 4);
+const latestComics = sortEntries(byLang(comics, lang), 'rating').slice(0, 4);
+const latestNovels = sortEntries(byLang(novels, lang), 'rating').slice(0, 4);
+
+// 本周新增：给爬虫一个持续回访的理由（7 天内有新收录才展示，无则整块隐藏）
+const FRESH_WINDOW_DAYS = 7;
+const freshCutoff = Date.now() - FRESH_WINDOW_DAYS * 86400000;
+const fresh = [
+  ...byLang(videos, lang).map((entry) => ({ entry, type: 'videos' as const })),
+  ...byLang(comics, lang).map((entry) => ({ entry, type: 'comics' as const })),
+  ...byLang(novels, lang).map((entry) => ({ entry, type: 'novels' as const })),
+]
+  .filter((x) => x.entry.data.pubDate.valueOf() >= freshCutoff)
+  .sort((a, b) => b.entry.data.pubDate.valueOf() - a.entry.data.pubDate.valueOf())
+  .slice(0, 8);
+
+// 专题推荐：首页直连长文页，让权重流向站内最有内容厚度的页面
+const editorialBase = localizedPath('/editorial/', lang);
+const featuredEditorial = (await getCollection('editorial'))
+  .filter((e) => (e.data.language ?? 'zh') === lang)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+  .slice(0, 3);
+
+const counts = [
+  { label: t('stat.videos'), value: byLang(videos, lang).length },
+  { label: t('stat.comics'), value: byLang(comics, lang).length },
+  { label: t('stat.novels'), value: byLang(novels, lang).length },
+  {
+    label: t('stat.total'),
+    value: byLang(videos, lang).length + byLang(comics, lang).length + byLang(novels, lang).length,
+  },
+];
+
+const sections = [
+  {
+    key: 'videos' as const,
+    title: t('section.latestVideos'),
+    subtitle: t('section.videosSub'),
+    href: localizedPath('/videos/', lang),
+    items: latestVideos,
+  },
+  {
+    key: 'comics' as const,
+    title: t('section.latestComics'),
+    subtitle: t('section.comicsSub'),
+    href: localizedPath('/comics/', lang),
+    items: latestComics,
+  },
+  {
+    key: 'novels' as const,
+    title: t('section.latestNovels'),
+    subtitle: t('section.novelsSub'),
+    href: localizedPath('/novels/', lang),
+    items: latestNovels,
+  },
+];
+
+// ===== 编辑精选（跨类型）：源平台热度分 Top N，且必须带人工 review =====
+const combined = [
+  ...byLang(videos, lang).map((e) => ({ e, type: 'videos' as const })),
+  ...byLang(comics, lang).map((e) => ({ e, type: 'comics' as const })),
+  ...byLang(novels, lang).map((e) => ({ e, type: 'novels' as const })),
+];
+const typeOf = new Map(combined.map((x) => [x.e, x.type]));
+const homePicks = pickEditorPicks(combined.map((x) => x.e), { limit: 6 }).map((e) => ({
+  e,
+  type: typeOf.get(e)!,
+}));
+
+const title = lang === 'en' ? 'HubLinks · Discover content worth your time' : 'HubLinks · 发现值得一看的优质内容';
+const description =
+  lang === 'en'
+    ? 'A discovery hub for short videos, comics and novels. We index links only — click through to the official source.'
+    : '聚合短视频、漫画与小说的内容发现站，点击直达原站，本站零媒体存储。';
+---
+
+<Layout title={title} description={description} lang={lang}>
+  <section class="relative overflow-hidden border-b border-slate-200 bg-white">
+    <div class="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-100 blur-3xl"></div>
+    <div class="pointer-events-none absolute -left-16 top-16 h-56 w-56 rounded-full bg-indigo-100 blur-3xl"></div>
+    <div class="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
+      <div class="max-w-2xl">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+          {t('hero.badge')}
+        </span>
+        <h1 class="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+          {t('hero.title')}
+        </h1>
+        <p class="mt-4 text-lg leading-8 text-slate-600">{t('hero.desc')}</p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a
+            href={localizedPath('/videos/', lang)}
+            class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            {t('hero.ctaBrowse')}
+          </a>
+          <a
+            href={localizedPath('/about/', lang)}
+            class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            {t('hero.ctaAbout')}
+          </a>
+        </div>
+      </div>
+
+      <dl class="mt-12 grid max-w-2xl grid-cols-2 gap-4 sm:grid-cols-4">
+        {
+          counts.map((s) => (
+            <div class="rounded-2xl border border-slate-200 bg-white/70 p-4 text-center">
+              <dt class="text-xs font-medium text-slate-500">{s.label}</dt>
+              <dd class="mt-1 text-2xl font-bold text-slate-900">{s.value}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <AdSlot class="mx-auto max-w-7xl px-4 sm:px-6" label="Advertisement" />
+
+  <div class="mx-auto max-w-7xl space-y-14 px-4 py-12 sm:px-6">
+    {
+      fresh.length > 0 && (
+        <section>
+          <div class="mb-5 flex items-end justify-between">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">{t('home.fresh')}</h2>
+              <p class="mt-0.5 text-sm text-slate-500">{t('home.freshSub')}</p>
+            </div>
+            <span class="text-sm font-medium text-brand-600">
+              {fresh.length} {lang === 'en' ? 'new' : '部'}
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {fresh.map((x) => (
+              <Card entry={x.entry} type={x.type} lang={lang} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      homePicks.length > 0 && (
+        <section>
+          <div class="mb-5 flex items-end justify-between">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">{t('picks.title')}</h2>
+              <p class="mt-0.5 text-sm text-slate-500">{t('picks.subtitle')}</p>
+            </div>
+          </div>
+          <ol class="grid gap-3 sm:grid-cols-2">
+            {homePicks.map(({ e, type }, i) => (
+              <li class="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
+                  {i + 1}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <a
+                    href={`/${type}/${e.id}/`}
+                    class="block truncate font-semibold text-slate-900 hover:text-brand-600"
+                  >
+                    {e.data.title}
+                  </a>
+                  {e.data.review && (
+                    <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{e.data.review}</p>
+                  )}
+                  <p class="mt-1 truncate text-[11px] text-slate-400">
+                    <span class="font-medium text-slate-600">{e.data.platform}</span>
+                    <span class="px-1.5 text-slate-300">·</span>
+                    <span>{metricLine(e, lang)}</span>
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p class="mt-3 max-w-3xl text-xs leading-5 text-slate-400">{t('picks.methodology')}</p>
+        </section>
+      )
+    }
+
+    {
+      sections.map((section) => (
+        <section>
+          <div class="mb-5 flex items-end justify-between">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">{section.title}</h2>
+              <p class="mt-0.5 text-sm text-slate-500">{section.subtitle}</p>
+            </div>
+            <a href={section.href} class="text-sm font-medium text-brand-600 hover:text-brand-700">
+              {t('section.viewAll')}
+            </a>
+          </div>
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {section.items.map((entry) => (
+              <Card entry={entry} type={section.key} lang={lang} />
+            ))}
+          </div>
+        </section>
+      ))
+    }
+
+    {
+      featuredEditorial.length > 0 && (
+        <section class="rounded-2xl border border-slate-200 bg-white p-6">
+          <div class="mb-4 flex items-end justify-between">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">{t('editorial.title')}</h2>
+              <p class="mt-0.5 text-sm text-slate-500">{t('editorial.subtitle')}</p>
+            </div>
+            <a href={editorialBase} class="text-sm font-medium text-brand-600 hover:text-brand-700">
+              {t('editorial.all')}
+            </a>
+          </div>
+          <ul class="grid gap-4 sm:grid-cols-3">
+            {featuredEditorial.map((e) => (
+              <li class="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <a href={`${editorialBase}${e.slug}/`} class="group block">
+                  <h3 class="text-sm font-semibold leading-6 text-slate-900 group-hover:text-brand-600">
+                    {e.data.title}
+                  </h3>
+                  <p class="mt-1.5 text-xs leading-5 text-slate-500">{e.data.description}</p>
+                  <p class="mt-2 text-[11px] text-slate-400">
+                    {t('editorial.included')} {e.data.entries.length}{' '}
+                    {lang === 'en' ? 'titles' : '部作品'}
+                  </p>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <AdSlot label="Advertisement" />
+
+    <AffiliateBanner lang={lang} />
+  </div>
+</Layout>

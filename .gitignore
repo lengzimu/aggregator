@@ -1,0 +1,22 @@
+# build output
+dist/
+# generated types
+.astro/
+# dependencies
+node_modules/
+# env
+.env
+.env.*
+!.env.example
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+# misc
+.DS_Store
+Thumbs.db
+*.local
+
+# 内部记忆/自动化数据，不入库
+.workbuddy/

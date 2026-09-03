@@ -1,0 +1,351 @@
+---
+import { useTranslations, defaultLang, type Lang } from '../i18n/ui.ts';
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
+
+// 下架端点（Cloudflare Pages Function）。可用 PUBLIC_DMCA_ENDPOINT 覆盖。
+const endpoint = Astro.locals?.env?.DMCA_ENDPOINT || import.meta.env.PUBLIC_DMCA_ENDPOINT || '/api/dmca';
+// 无后端时的兜底：预填 GitHub 工单（需配置 PUBLIC_DMCA_REPO）
+const repo = import.meta.env.PUBLIC_DMCA_REPO || '';
+// Cloudflare Turnstile 站点密钥（未配置则完全跳过 CAPTCHA，不影响现有流程）
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+
+const isEn = lang === 'en';
+const L = isEn
+  ? {
+      title: 'Submit a DMCA Takedown Request',
+      intro:
+        'Fill in the details below. We process valid requests and remove the linked content, typically within 48 hours.',
+      name: 'Your full legal name',
+      email: 'Email address',
+      original: 'URL of the original work',
+      page: 'URL of the page to remove on this site (e.g. /videos/example/)',
+      desc: 'Description of the infringement',
+      descPh: 'Describe how the content infringes your copyright…',
+      faith: 'I have a good-faith belief that the use is not authorized by the copyright owner.',
+      sign: 'Electronic signature (your name)',
+      submit: 'Submit takedown request',
+      submitting: 'Submitting…',
+      formError: 'Please correct the highlighted fields and try again.',
+      success: 'Request received. The referenced content has been queued for removal.',
+      successIssue: 'Takedown endpoint not configured — a pre-filled GitHub issue has been opened for the admin.',
+      // 逐字段错误文案
+      errNameRequired: 'Please enter your full legal name.',
+      errEmailRequired: 'Please enter your email address.',
+      errEmailInvalid: 'Please enter a valid email address.',
+      errOriginalRequired: 'Please enter the URL of the original work.',
+      errOriginalInvalid: 'URL must start with http:// or https://',
+      errPageRequired: 'Please enter the page URL to remove.',
+      errPageInvalid: 'Must look like /videos/example/ (videos, comics or novels).',
+      errSignRequired: 'Please provide your electronic signature.',
+      errFaithRequired: 'You must confirm the good-faith statement.',
+      errCaptcha: 'Please complete the security check.',
+    }
+  : {
+      title: '提交 DMCA 下架申请',
+      intro: '填写下方信息。我们会在核实后下架相关作品，通常 48 小时内处理完毕。',
+      name: '举报人法定全名',
+      email: '电子邮箱',
+      original: '原始作品链接',
+      page: '本站待下架页面链接（如 /videos/example/）',
+      desc: '侵权情况说明',
+      descPh: '请说明该内容如何侵犯了您的版权……',
+      faith: '本人善意相信该使用未获版权所有者授权。',
+      sign: '电子签名（您的姓名）',
+      submit: '提交下架申请',
+      submitting: '提交中……',
+      formError: '请修正下方标红的字段后重试。',
+      success: '申请已收到，相关作品已进入下架流程。',
+      successIssue: '未配置下架端点——已为你打开预填的 GitHub 工单，等待管理员处理。',
+      errNameRequired: '请填写举报人法定全名。',
+      errEmailRequired: '请填写电子邮箱。',
+      errEmailInvalid: '邮箱格式不正确。',
+      errOriginalRequired: '请填写原始作品链接。',
+      errOriginalInvalid: '链接需以 http:// 或 https:// 开头。',
+      errPageRequired: '请填写待下架页面的链接。',
+      errPageInvalid: '需形如 /videos/example/（videos、comics 或 novels 之一）。',
+      errSignRequired: '请填写电子签名。',
+      errFaithRequired: '请勾选善意声明。',
+      errCaptcha: '请完成安全验证。',
+    };
+
+// 把配置与文案交给前端脚本（避免模板字符串转义问题）
+const config = JSON.stringify({ endpoint, repo, turnstileSiteKey, L });
+---
+
+<section class="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+  <h2 class="text-xl font-semibold text-slate-900">{L.title}</h2>
+  <p class="mt-2 text-sm leading-6 text-slate-600">{L.intro}</p>
+
+  <form id="dmca-form" class="mt-6 space-y-4" novalidate>
+    <!-- 蜜罐：机器人自动填充，正常用户看不到 -->
+    <input type="text" name="company" tabindex="-1" autocomplete="off" class="hidden" aria-hidden="true" />
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">{L.name}</span>
+        <input
+          name="name"
+          type="text"
+          autocomplete="name"
+          class="dmca-input mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        />
+        <p class="dmca-error text-xs text-rose-600" data-error="name" hidden></p>
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">{L.email}</span>
+        <input
+          name="email"
+          type="email"
+          autocomplete="email"
+          class="dmca-input mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        />
+        <p class="dmca-error text-xs text-rose-600" data-error="email" hidden></p>
+      </label>
+    </div>
+
+    <label class="block">
+      <span class="text-sm font-medium text-slate-700">{L.original}</span>
+      <input
+        name="original"
+        type="url"
+        placeholder="https://…"
+        class="dmca-input mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+      />
+      <p class="dmca-error text-xs text-rose-600" data-error="original" hidden></p>
+    </label>
+
+    <label class="block">
+      <span class="text-sm font-medium text-slate-700">{L.page}</span>
+      <input
+        name="pageUrl"
+        type="text"
+        placeholder="/videos/example/"
+        class="dmca-input mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+      />
+      <p class="dmca-error text-xs text-rose-600" data-error="pageUrl" hidden></p>
+    </label>
+
+    <label class="block">
+      <span class="text-sm font-medium text-slate-700">{L.desc}</span>
+      <textarea
+        name="description"
+        rows="4"
+        placeholder={L.descPh}
+        class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+      ></textarea>
+    </label>
+
+    <div>
+      <label class="flex items-start gap-2 text-sm text-slate-600">
+        <input name="faith" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600" />
+        <span>{L.faith}</span>
+      </label>
+      <p class="dmca-error text-xs text-rose-600" data-error="faith" hidden></p>
+    </div>
+
+    <label class="block">
+      <span class="text-sm font-medium text-slate-700">{L.sign}</span>
+      <input
+        name="signature"
+        type="text"
+        autocomplete="off"
+        class="dmca-input mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+      />
+      <p class="dmca-error text-xs text-rose-600" data-error="signature" hidden></p>
+    </label>
+
+    <button
+      type="submit"
+      class="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {L.submit}
+    </button>
+
+    <p id="dmca-msg" class="hidden rounded-lg border px-4 py-3 text-sm" role="alert"></p>
+  </form>
+
+  {turnstileSiteKey && (
+    <>
+      <div class="cf-turnstile mt-4" data-sitekey={turnstileSiteKey}></div>
+      <p class="dmca-error text-xs text-rose-600" data-error="cfToken" hidden></p>
+      <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    </>
+  )}
+
+  <script type="application/json" id="dmca-config" set:html={config}></script>
+  <script is:inline>
+    (function () {
+      var cfg = JSON.parse(document.getElementById('dmca-config').textContent);
+      var L = cfg.L;
+      var form = document.getElementById('dmca-form');
+      var msg = document.getElementById('dmca-msg');
+      var btn = form.querySelector('button[type="submit"]');
+      var btnText = btn.textContent;
+
+      // 非法字符正则（用于校验）
+      function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+      function isUrl(v) {
+        try { var u = new URL(v); return u.protocol === 'http:' || u.protocol === 'https:'; }
+        catch (e) { return false; }
+      }
+      function isPage(v) { return /\/(videos|comics|novels)\/[a-z0-9-]+\/?$/i.test(v.trim()); }
+
+      // 设置 / 清除单个字段的错误展示
+      function setError(name, text) {
+        var el = form.querySelector('[data-error="' + name + '"]');
+        var input = form.querySelector('[name="' + name + '"]');
+        if (el) { el.textContent = text || ''; el.hidden = !text; }
+        if (input) {
+          if (text) {
+            input.setAttribute('aria-invalid', 'true');
+            input.classList.add('border-rose-400', 'focus:border-rose-400', 'focus:ring-rose-100');
+            input.classList.remove('border-slate-200', 'focus:border-brand-400', 'focus:ring-brand-100');
+          } else {
+            input.setAttribute('aria-invalid', 'false');
+            input.classList.remove('border-rose-400', 'focus:border-rose-400', 'focus:ring-rose-100');
+            input.classList.add('border-slate-200', 'focus:border-brand-400', 'focus:ring-brand-100');
+          }
+        }
+      }
+
+      function showMsg(text, kind) {
+        msg.textContent = text;
+        msg.hidden = false;
+        if (kind === 'error') {
+          msg.className = 'mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800';
+        } else {
+          msg.className = 'mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800';
+        }
+      }
+
+      function clearAll() {
+        ['name', 'email', 'original', 'pageUrl', 'signature', 'faith'].forEach(function (n) { setError(n, ''); });
+        msg.hidden = true;
+      }
+
+      // 逐字段校验，返回 { field: message }
+      function validate(p) {
+        var errors = {};
+        if (p.name.length < 2) errors.name = L.errNameRequired;
+        if (!p.email) errors.email = L.errEmailRequired;
+        else if (!isEmail(p.email)) errors.email = L.errEmailInvalid;
+        if (!p.original) errors.original = L.errOriginalRequired;
+        else if (!isUrl(p.original)) errors.original = L.errOriginalInvalid;
+        if (!p.pageUrl) errors.pageUrl = L.errPageRequired;
+        else if (!isPage(p.pageUrl)) errors.pageUrl = L.errPageInvalid;
+        if (!p.signature) errors.signature = L.errSignRequired;
+        if (!p.faith) errors.faith = L.errFaithRequired;
+        return errors;
+      }
+
+      // 输入时实时清除该字段错误
+      ['name', 'email', 'original', 'pageUrl', 'signature'].forEach(function (n) {
+        var input = form.querySelector('[name="' + n + '"]');
+        if (input) input.addEventListener('input', function () { setError(n, ''); });
+      });
+      var faith = form.querySelector('[name="faith"]');
+      if (faith) faith.addEventListener('change', function () { setError('faith', ''); });
+
+      function fallbackIssue(p) {
+        if (!cfg.repo) { showMsg(L.successIssue, 'error'); return; }
+        var title = 'DMCA Takedown: ' + p.pageUrl;
+        var body =
+          'Page to remove: ' + p.pageUrl + '\n' +
+          'Original work: ' + p.original + '\n' +
+          'Reporter: ' + p.name + ' <' + p.email + '>\n' +
+          'Details: ' + (p.description || '(none)') + '\n' +
+          'Signature: ' + p.signature;
+        var url =
+          'https://github.com/' + cfg.repo + '/issues/new?title=' +
+          encodeURIComponent(title) + '&body=' + encodeURIComponent(body) +
+          '&labels=' + encodeURIComponent('dmca-takedown');
+        window.open(url, '_blank');
+        showMsg(L.successIssue, 'error');
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearAll();
+        var fd = new FormData(form);
+        var p = {
+          name: (fd.get('name') || '').toString().trim(),
+          email: (fd.get('email') || '').toString().trim(),
+          original: (fd.get('original') || '').toString().trim(),
+          pageUrl: (fd.get('pageUrl') || '').toString().trim(),
+          description: (fd.get('description') || '').toString().trim(),
+          signature: (fd.get('signature') || '').toString().trim(),
+          faith: fd.get('faith') === 'on' || fd.get('faith') === true,
+        };
+        // 蜜罐：机器人填了隐藏字段则静默丢弃
+        if ((fd.get('company') || '').toString().trim() !== '') return;
+
+        // 前端校验
+        var errors = validate(p);
+        var keys = Object.keys(errors);
+        if (keys.length) {
+          keys.forEach(function (k) { setError(k, errors[k]); });
+          var first = form.querySelector('[name="' + keys[0] + '"]');
+          if (first && first.focus) first.focus();
+          showMsg(L.formError, 'error');
+          return;
+        }
+
+        // Turnstile CAPTCHA：仅在配置了站点密钥时校验
+        var cfToken = '';
+        if (cfg.turnstileSiteKey) {
+          if (window.turnstile) cfToken = window.turnstile.getResponse() || '';
+          if (!cfToken) {
+            setError('cfToken', L.errCaptcha);
+            showMsg(L.formError, 'error');
+            return;
+          }
+          p.cfToken = cfToken;
+        }
+
+        // 校验通过：锁定按钮，防重复提交
+        btn.disabled = true;
+        btn.textContent = L.submitting;
+
+        fetch(cfg.endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(p),
+        })
+          .then(function (r) {
+            return r.json()
+              .then(function (d) { d.__status = r.status; return d; })
+              .catch(function () { return { ok: false, __status: r.status }; });
+          })
+          .then(function (d) {
+            // 频率限制：429 直接提示，不走工单兜底
+            if (d.__status === 429) {
+              showMsg(L.errRateLimited + (d.retryAfter ? ' (' + d.retryAfter + 's)' : ''), 'error');
+              return;
+            }
+            if (d && d.ok) {
+              showMsg(L.success, 'success');
+              form.reset();
+            } else if (d && d.errors) {
+              // 服务端返回的字段级错误（含 CAPTCHA 失败）
+              Object.keys(d.errors).forEach(function (k) { setError(k, d.errors[k]); });
+              showMsg(L.formError, 'error');
+            } else {
+              fallbackIssue(p); // 端点未配置或失败 → 走工单兜底
+            }
+          })
+          .catch(function () { fallbackIssue(p); })
+          .finally(function () {
+            btn.disabled = false;
+            btn.textContent = btnText;
+            // 提交后重置挂件，避免复用同一 token
+            if (cfg.turnstileSiteKey && window.turnstile) window.turnstile.reset();
+          });
+      });
+    })();
+  </script>
+</section>

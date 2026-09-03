@@ -1,0 +1,86 @@
+---
+import { useTranslations, type Lang } from '../i18n/ui.ts';
+
+interface Props {
+  lang: Lang;
+  /** 列表基址，必须以 / 结尾，例如 /comics/ 或 /en/comics/ */
+  basePath: string;
+  page: number;
+  totalPages: number;
+}
+
+const { lang, basePath, page, totalPages } = Astro.props;
+const t = useTranslations(lang);
+
+/** 第 1 页直接用基址，其余走 /page/<n>/ */
+function href(p: number): string {
+  return p <= 1 ? basePath : `${basePath}page/${p}/`;
+}
+
+// 页码窗口：首页、末页、当前页前后各 2 页，其余折叠为省略号
+const WINDOW = 2;
+const pages: (number | '…')[] = [];
+for (let i = 1; i <= totalPages; i++) {
+  if (i === 1 || i === totalPages || Math.abs(i - page) <= WINDOW) pages.push(i);
+  else if (pages[pages.length - 1] !== '…') pages.push('…');
+}
+
+const pageOf = (p: number) =>
+  t('pagination.pageOf').replace('{page}', String(p)).replace('{total}', String(totalPages));
+---
+
+{
+  totalPages > 1 && (
+    <nav aria-label="Pagination" class="mt-10 flex flex-wrap items-center justify-center gap-2">
+      {page > 1 ? (
+        <a
+          href={href(page - 1)}
+          rel="prev"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+        >
+          {t('pagination.prev')}
+        </a>
+      ) : (
+        <span class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm text-slate-300">
+          {t('pagination.prev')}
+        </span>
+      )}
+
+      {pages.map((p) =>
+        p === '…' ? (
+          <span class="px-1 text-sm text-slate-300">…</span>
+        ) : p === page ? (
+          <span
+            aria-current="page"
+            class="rounded-lg border border-brand-600 bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white"
+          >
+            {p}
+          </span>
+        ) : (
+          <a
+            href={href(p)}
+            class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+          >
+            {p}
+          </a>
+        ),
+      )}
+
+      {page < totalPages ? (
+        <a
+          href={href(page + 1)}
+          rel="next"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+        >
+          {t('pagination.next')}
+        </a>
+      ) : (
+        <span class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm text-slate-300">
+          {t('pagination.next')}
+        </span>
+      )}
+
+      <span class="ml-2 text-xs text-slate-400">{pageOf(page)}</span>
+    </nav>
+  )
+}

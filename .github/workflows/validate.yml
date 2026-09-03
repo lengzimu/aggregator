@@ -1,0 +1,30 @@
+name: Validate Content
+
+# 内容质量门：任何人 push / 开 PR 到 main 时，先跑轻量校验（无需装 Astro），
+# 拦住「重复录入」与「有热度却没写 review」的低质内容，避免部署后才发现。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 重复录入检测（sourceId / sourceUrl 重复 = 确定重复）；--strict 时存在确定重复则失败
+      - name: Dedupe check
+        run: node scripts/dedupe.mjs --strict
+
+      # 编辑精选准入：有热度指标却没写 review 的条目会被拦下
+      - name: Review gating
+        run: node scripts/check-reviews.mjs --strict

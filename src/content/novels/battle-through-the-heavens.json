@@ -1,0 +1,25 @@
+{
+  "title": "Battle Through the Heavens",
+  "author": "Tian Can Tu Dou",
+  "platform": "Wuxiaworld",
+  "sourceUrl": "https://www.wuxiaworld.com/novel/battle-through-the-heavens",
+  "coverUrl": "https://picsum.photos/seed/btth-wuxiaworld/400/600",
+  "language": "en",
+  "status": "ongoing",
+  "tags": [
+    "Xianxia",
+    "Adventure",
+    "Fantasy"
+  ],
+  "review": "The English edition of a Chinese genre classic. Long and formulaic across arcs, yet the fight choreography and translation consistency keep it readable for hundreds of chapters.",
+  "pubDate": "2026-08-16",
+  "origin": "manual",
+  "sourceId": "wuxiaworld:battle-through-the-heavens",
+  "metrics": {
+    "rating": 9,
+    "views": 14200000,
+    "growth": 3.5,
+    "rank": 5,
+    "capturedAt": "2026-09-01"
+  }
+}

@@ -1,0 +1,154 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import {
+  defaultLang,
+  formatCount,
+  platformName,
+  statusName,
+  useTranslations,
+  type Lang,
+} from '../i18n/ui.ts';
+import { fmtDate, metricsOf } from '../lib/content.ts';
+
+interface Props {
+  entry: CollectionEntry<'videos' | 'comics' | 'novels'>;
+  type: 'videos' | 'comics' | 'novels';
+  lang?: Lang;
+}
+
+const { entry, type, lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
+const data = entry.data;
+
+// 平台标签配色映射
+const platformStyles: Record<string, string> = {
+  抖音: 'bg-slate-900 text-white',
+  TikTok: 'bg-cyan-600 text-white',
+  Webtoon: 'bg-emerald-600 text-white',
+  Tapas: 'bg-violet-600 text-white',
+  腾讯动漫: 'bg-blue-600 text-white',
+  漫客栈: 'bg-teal-600 text-white',
+  快看: 'bg-orange-500 text-white',
+  Webnovel: 'bg-indigo-600 text-white',
+  Wattpad: 'bg-rose-600 text-white',
+  Wuxiaworld: 'bg-amber-600 text-white',
+  番茄小说: 'bg-red-600 text-white',
+};
+const platformClass = platformStyles[data.platform] ?? 'bg-slate-600 text-white';
+
+const creator = 'creator' in data ? data.creator : data.author;
+const status = 'status' in data ? String(data.status) : '';
+const metrics = metricsOf(entry);
+const entryLang = data.language ?? 'zh';
+---
+
+<article
+  class="card group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+  data-card
+  data-platform={data.platform}
+  data-tags={data.tags.join(',')}
+  data-status={status}
+  data-lang={entryLang}
+  data-date={new Date(data.pubDate).getTime()}
+  data-views={metrics.views ?? metrics.subscribers ?? ''}
+  data-rating={metrics.rating ?? ''}
+  data-growth={metrics.growth ?? ''}
+>
+  <a
+    href={`/${type}/${entry.id}/`}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="flex flex-1 flex-col"
+  >
+    <div class="relative aspect-[2/3] overflow-hidden bg-slate-100">
+      <img
+        src={data.coverUrl || '/default-cover.svg'}
+        alt={data.title}
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+        onerror="this.onerror=null;this.src='/default-cover.svg'"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+      />
+      <span
+        class:list={[
+          'absolute left-2 top-2 rounded-md px-2 py-0.5 text-xs font-semibold',
+          platformClass,
+        ]}
+      >
+        {platformName(data.platform, lang)}
+      </span>
+
+      {
+        status && (
+          <span class="absolute right-2 top-2 rounded-md bg-black/55 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+            {statusName(status, lang)}
+          </span>
+        )
+      }
+
+      {
+        metrics.rating != null && (
+          <span class="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-semibold text-amber-300 backdrop-blur">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2.5l2.9 6.06 6.6.86-4.85 4.55 1.2 6.53L12 17.4l-5.85 3.1 1.2-6.53L2.5 9.42l6.6-.86L12 2.5z"></path>
+            </svg>
+            {metrics.rating.toFixed(1)}
+          </span>
+        )
+      }
+
+      {
+        metrics.rank != null && (
+          <span class="absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-semibold text-white backdrop-blur">
+            #{metrics.rank}
+          </span>
+        )
+      }
+    </div>
+
+    <div class="flex flex-1 flex-col gap-1 p-3">
+      <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{data.title}</h3>
+      <p class="text-xs text-slate-500">{creator}</p>
+
+      {
+        /* 编辑短评：列表页可索引，每条贡献原创文本，是抗「薄内容」的主力 */
+        data.review && (
+          <p class="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{data.review}</p>
+        )
+      }
+
+      {
+        (metrics.views != null || metrics.growth != null) && (
+          <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
+            {metrics.views != null && <span>{formatCount(metrics.views, lang)} {lang === 'en' ? 'views' : '阅读'}</span>}
+            {metrics.growth != null && (
+              <span class={metrics.growth >= 0 ? 'text-emerald-600' : 'text-slate-400'}>
+                {metrics.growth >= 0 ? '↑' : '↓'} {Math.abs(metrics.growth).toFixed(1)}%
+              </span>
+            )}
+          </div>
+        )
+      }
+
+      {
+        /* 数据快照时间：证明指标被持续维护，是对搜索引擎的 freshness 信号 */
+        metrics.capturedAt && (
+          <p class="mt-0.5 text-[10px] text-slate-300">
+            {t('metric.updatedAt')} {fmtDate(metrics.capturedAt)}
+          </p>
+        )
+      }
+
+      {
+        data.tags.length > 0 && (
+          <div class="mt-1 flex flex-wrap gap-1">
+            {data.tags.slice(0, 3).map((tag) => (
+              <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">{tag}</span>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  </a>
+</article>

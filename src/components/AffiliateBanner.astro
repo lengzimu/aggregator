@@ -1,0 +1,56 @@
+---
+import { defaultLang, type Lang } from '../i18n/ui.ts';
+
+// 联盟营销横幅：链接与名称均可通过 PUBLIC_ 环境变量覆盖（见 .env.example）
+interface Props {
+  lang?: Lang;
+}
+const { lang = defaultLang } = Astro.props;
+const isEn = lang === 'en';
+
+const affiliateUrl = import.meta.env.PUBLIC_AFFILIATE_URL || 'https://www.amazon.com/?tag=YOUR-TAG-20';
+const affiliateLabel = import.meta.env.PUBLIC_AFFILIATE_LABEL || 'Amazon Associates';
+---
+
+<aside
+  class="affiliate-banner relative overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5"
+  data-pagefind-ignore
+>
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h2 class="text-sm font-semibold text-amber-900">
+        {isEn ? 'Recommended' : '推荐阅读'} · {affiliateLabel}
+      </h2>
+      <p class="mt-1 text-sm text-amber-800/80">
+        {
+          isEn
+            ? 'Original comics, novels and creative picks — check them out on the official store.'
+            : '精选原版漫画、小说与创意好物，点击前往官方渠道查看。'
+        }
+      </p>
+      <p class="mt-2 text-xs text-amber-700/70">
+        {
+          isEn
+            ? 'Ad · Affiliate disclosure: buying through our links may earn us a small commission at no extra cost to you.'
+            : '广告 · 联盟披露：通过本站链接完成购买，我们可能获得少量佣金，不会增加你的费用。'
+        }
+      </p>
+    </div>
+    <a
+      href={affiliateUrl}
+      target="_blank"
+      rel="noopener noreferrer sponsored"
+      class="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+    >
+      {isEn ? 'Take a look' : '去逛逛'}
+      <svg class="ml-1" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M5 12h14m-6-6 6 6-6 6"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path>
+      </svg>
+    </a>
+  </div>
+</aside>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" role="img" aria-label="默认封面">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="600" fill="url(#g)" />
+  <rect width="400" height="600" fill="url(#shine)" />
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1">
+    <circle cx="120" cy="150" r="90" />
+    <circle cx="280" cy="300" r="130" />
+    <circle cx="90" cy="470" r="70" />
+  </g>
+  <g transform="translate(200,300)">
+    <g fill="#ffffff" fill-opacity="0.92">
+      <rect x="-46" y="-34" width="40" height="40" rx="8" />
+      <rect x="6" y="6" width="40" height="40" rx="8" />
+    </g>
+    <g stroke="#ffffff" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round">
+      <path d="M-26 -14 H 26" />
+      <path d="M-14 -26 V 26" />
+    </g>
+  </g>
+  <text x="200" y="540" text-anchor="middle" fill="#ffffff" fill-opacity="0.75" font-family="sans-serif" font-size="22" font-weight="600" letter-spacing="1">HubLinks</text>
+</svg>

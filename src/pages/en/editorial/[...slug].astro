@@ -1,0 +1,15 @@
+---
+import { getCollection } from 'astro:content';
+import EditorialArticle from '../../../components/EditorialArticle.astro';
+
+export async function getStaticPaths() {
+  const all = await getCollection('editorial');
+  return all
+    .filter((e) => (e.data.language ?? 'zh') === 'en')
+    .map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+---
+
+<EditorialArticle lang="en" entry={entry} />

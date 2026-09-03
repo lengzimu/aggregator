@@ -1,0 +1,23 @@
+{
+  "title": "快看漫画 · 编辑推荐作品",
+  "author": "快看编辑部",
+  "platform": "快看",
+  "sourceUrl": "https://www.kuaikanmanhua.com/web/topic/1789",
+  "coverUrl": "https://picsum.photos/seed/kuaikan-1789/400/600",
+  "language": "zh",
+  "status": "ongoing",
+  "tags": [
+    "都市",
+    "情感"
+  ],
+  "review": "快看本站编辑推荐位的作品集合入口，上新频率稳定，适合用来快速扫新书。具体收录以页面内实际榜单为准。",
+  "pubDate": "2026-08-24",
+  "origin": "manual",
+  "sourceId": "kuaikan:1789",
+  "metrics": {
+    "rating": 8.9,
+    "views": 3400000,
+    "growth": 9.8,
+    "capturedAt": "2026-09-01"
+  }
+}

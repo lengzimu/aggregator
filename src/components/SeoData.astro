@@ -1,0 +1,78 @@
+---
+/**
+ * JSON-LD 结构化数据聚合组件。
+ * - 始终输出 Organization（站点实体，利于品牌搜索/富结果）
+ * - 传 crumbs 时输出 BreadcrumbList（面包屑富结果）
+ * - 传 entries 时输出 ItemList（列表页内容结构，便于谷歌理解聚合规模）
+ *
+ * 用 is:inline 防止 Astro 把脚本当作模块处理；set:html 注入序列化后的 JSON。
+ */
+import type { Lang } from '../i18n/ui.ts';
+
+interface Crumb {
+  name: string;
+  url: string;
+}
+interface Item {
+  title: string;
+  url: string;
+}
+interface Props {
+  lang?: Lang;
+  crumbs?: Crumb[];
+  entries?: Item[];
+}
+
+const { lang = 'zh', crumbs, entries } = Astro.props;
+const site = Astro.site ?? new URL('https://example.com');
+
+const blocks: Record<string, unknown>[] = [];
+
+// 1) 站点实体（每个页面都带，强化品牌实体）
+blocks.push({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'HubLinks',
+  url: site.toString(),
+  logo: new URL('/favicon.svg', site).toString(),
+  description:
+    lang === 'en'
+      ? 'Curated hub linking to official short-video, comics and novel platforms.'
+      : '精选短视频、漫画与小说的正版平台导航站。',
+});
+
+// 2) 面包屑（列表/详情页可选）
+if (crumbs && crumbs.length) {
+  blocks.push({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: crumbs.map((c, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: c.name,
+      item: new URL(c.url, site).toString(),
+    })),
+  });
+}
+
+// 3) 内容列表（列表页可选）
+if (entries && entries.length) {
+  blocks.push({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    numberOfItems: entries.length,
+    itemListElement: entries.map((e, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: e.title,
+      url: new URL(e.url, site).toString(),
+    })),
+  });
+}
+---
+
+{
+  blocks.map((b) => (
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(b)} />
+  ))
+}

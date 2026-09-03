@@ -1,0 +1,48 @@
+---
+/**
+ * 广告位插槽（env 驱动，未配置则优雅降级为占位框）。
+ *
+ * 支持两种变现方式：
+ * 1) Google AdSense 手动插槽：配置 PUBLIC_ADSENSE_CLIENT（ca-pub-xxx）+ 插槽 id 后，
+ *    渲染 <ins class="adsbygoogle"> 并由 Layout 注入的 AdSense 脚本接管展示。
+ * 2) Ezoic：平台侧自动注入（把站点加入 Ezoic 并切换 DNS 即可），本组件无需改动——
+ *    此时保持占位降级，不影响布局。
+ *
+ * 未配置任何广告时，渲染中性占位框，开发与预览阶段布局不塌陷。
+ */
+interface Props {
+  /** 指定 AdSense 插槽 id；缺省时用 PUBLIC_ADSENSE_SLOT */
+  slot?: string;
+  format?: 'auto' | 'rectangle' | 'horizontal' | 'vertical';
+  class?: string;
+  /** 占位框里的小字标签 */
+  label?: string;
+}
+
+const { slot, format = 'auto', class: className = '', label = 'Advertisement' } = Astro.props;
+
+const client = import.meta.env.PUBLIC_ADSENSE_CLIENT; // 例如 ca-pub-1234567890
+const defaultSlot = import.meta.env.PUBLIC_ADSENSE_SLOT;
+const adSlot = slot || defaultSlot;
+const enabled = Boolean(client && adSlot);
+---
+
+{
+  enabled ? (
+    <div class:list={['ad-slot', className]}>
+      <ins
+        class="adsbygoogle"
+        style="display:block"
+        data-ad-client={client}
+        data-ad-slot={adSlot}
+        data-ad-format={format}
+        data-full-width-responsive="true"
+      />
+      <script is:inline>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  ) : (
+    <div class:list={['ad-slot', 'ad-slot--placeholder', className]} aria-hidden="true">
+      <span>{label}</span>
+    </div>
+  )
+}

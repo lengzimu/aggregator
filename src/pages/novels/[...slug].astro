@@ -1,0 +1,16 @@
+---
+import { getCollection } from 'astro:content';
+import RedirectView from '../../components/RedirectView.astro';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('novels');
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+---
+
+<RedirectView entry={entry} />

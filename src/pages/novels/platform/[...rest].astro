@@ -1,0 +1,33 @@
+---
+import { getCollection } from 'astro:content';
+import ListView from '../../../components/ListView.astro';
+import { PAGE_SIZE } from '../../../lib/content.ts';
+import { platformSlug } from '../../../i18n/ui.ts';
+
+export async function getStaticPaths() {
+  const all = await getCollection('novels');
+  const counts = new Map<string, number>();
+  for (const e of all) {
+    if ((e.data.language ?? 'zh') !== 'zh') continue;
+    counts.set(e.data.platform, (counts.get(e.data.platform) ?? 0) + 1);
+  }
+
+  const out = [];
+  for (const [platform, count] of counts) {
+    const slug = platformSlug(platform);
+    out.push({ params: { rest: slug }, props: { platform } });
+    const pages = Math.ceil(count / PAGE_SIZE);
+    for (let i = 2; i <= pages; i++) {
+      out.push({
+        params: { rest: `${slug}/page/${i}` },
+        props: { platform, page: i },
+      });
+    }
+  }
+  return out;
+}
+
+const { platform, page = 1 } = Astro.props;
+---
+
+<ListView lang="zh" type="novels" platform={platform} page={page} />

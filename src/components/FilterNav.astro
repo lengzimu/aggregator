@@ -1,0 +1,110 @@
+---
+import { platformName, useTranslations, type Lang } from '../i18n/ui.ts';
+import { defaultLang } from '../i18n/ui.ts';
+
+interface Props {
+  platforms: string[];
+  lang?: Lang;
+}
+
+const { platforms, lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
+
+const sortOptions = [
+  { value: 'latest', label: t('sort.latest') },
+  { value: 'hot', label: t('sort.hot') },
+  { value: 'rating', label: t('sort.rating') },
+  { value: 'growth', label: t('sort.growth') },
+];
+---
+
+<div class="mb-6 flex flex-wrap items-center gap-3">
+  <div class="filter-nav flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      data-filter="all"
+      class="filter-btn rounded-full border border-brand-600 bg-brand-600 px-4 py-1.5 text-sm font-medium text-white transition-colors"
+    >
+      {t('filter.all')}
+    </button>
+    {
+      platforms.map((p) => (
+        <button
+          type="button"
+          data-filter={p}
+          class="filter-btn rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700"
+        >
+          {platformName(p, lang)}
+        </button>
+      ))
+    }
+  </div>
+
+  <label class="ml-auto flex items-center gap-2 text-xs text-slate-500">
+    <span>{t('filter.sort')}</span>
+    <select
+      id="sort-select"
+      class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+    >
+      {sortOptions.map((o) => <option value={o.value}>{o.label}</option>)}
+    </select>
+  </label>
+</div>
+
+<script is:inline>
+  (function () {
+    var buttons = document.querySelectorAll('.filter-btn');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('[data-card]'));
+    var select = document.getElementById('sort-select');
+
+    function applyFilter(filter) {
+      buttons.forEach(function (btn) {
+        var active = btn.getAttribute('data-filter') === filter;
+        btn.classList.toggle('border-brand-600', active);
+        btn.classList.toggle('bg-brand-600', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('border-slate-200', !active);
+        btn.classList.toggle('bg-white', !active);
+        btn.classList.toggle('text-slate-700', !active);
+      });
+
+      cards.forEach(function (card) {
+        var match = filter === 'all' || card.getAttribute('data-platform') === filter;
+        card.style.display = match ? '' : 'none';
+      });
+    }
+
+    function num(el, key) {
+      var v = parseFloat(el.getAttribute(key));
+      return isNaN(v) ? -Infinity : v;
+    }
+
+    function applySort(mode) {
+      var container = cards.length ? cards[0].parentNode : null;
+      if (!container) return;
+
+      var sorted = cards.slice().sort(function (a, b) {
+        if (mode === 'hot') return num(b, 'data-views') - num(a, 'data-views');
+        if (mode === 'rating') return num(b, 'data-rating') - num(a, 'data-rating');
+        if (mode === 'growth') return num(b, 'data-growth') - num(a, 'data-growth');
+        return num(b, 'data-date') - num(a, 'data-date');
+      });
+
+      sorted.forEach(function (card) {
+        container.appendChild(card);
+      });
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        applyFilter(btn.getAttribute('data-filter') || 'all');
+      });
+    });
+
+    if (select) {
+      select.addEventListener('change', function () {
+        applySort(select.value);
+      });
+    }
+  })();
+</script>
