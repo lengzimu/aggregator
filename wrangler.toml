@@ -12,3 +12,7 @@ pages_build_output_dir = "dist"
 # [[kv_namespaces]]
 # binding = "RATE_LIMIT_KV"
 # id = "your-kv-namespace-id"
+
+# Cloudflare Pages 构建时环境变量
+[vars]
+PUBLIC_SITE_URL = "https://aggregator-9w7.pages.dev"
