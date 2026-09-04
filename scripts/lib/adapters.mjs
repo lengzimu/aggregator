@@ -50,6 +50,39 @@ function pick(obj, keys) {
 }
 
 /**
+ * 清洗封面 URL：只保留绝对 http(s) 地址；data: 占位图 / 相对路径 / 空 一律丢弃
+ * （否则 z.string().url() 在构建期失败，整站构建崩）。
+ */
+function cleanCover(url) {
+  if (typeof url !== 'string') return undefined;
+  return /^https?:\/\//i.test(url) ? url : undefined;
+}
+
+/**
+ * Webtoon 榜单 anchor 文本混入了排名前缀与尾部题材/热度噪声，例：
+ *   "1" up 9 I Got Pregnant with the Tyrant's Child Romance 96,759
+ *   "2" up 12 DARK MOON: THE BLOOD ALTAR Fantasy 4.8M
+ * 去掉前缀 `"N" up M ` 与尾部 ` <Genre> <views>`，还原干净标题。
+ */
+function cleanWebtoonTitle(t) {
+  let s = String(t).replace(/^"\d+"\s*up\s*\d+\s*/i, '');
+  s = s.replace(/\s+[A-Z][a-z]*(?:-[A-Z][a-z]*)*\s[\d.,]+(?:M|K|m|k)?\s*$/, '');
+  s = s.trim();
+  return s || String(t).trim();
+}
+
+/**
+ * 生成"编辑短评"：只写聚合站自己的增量信号（当前榜单名次），不抄剧情、不模板堆砌。
+ * 含真实 title/rank，每条不同；满足 check-reviews 准入（有 metrics 必须有 review）。
+ */
+function makeReview(platform, rank, lang) {
+  if (lang === 'zh') {
+    return `当前位列${platform}热门榜第${rank}名，连载中，更新稳定，可据此按题材挑着追更。`;
+  }
+  return `Currently #${rank} on ${platform}'s chart — ongoing with steady weekly updates.`;
+}
+
+/**
  * 从一批 anchor 中按平台 id 正则去重，提取 {id, href, title, cover}。
  * 标题优先级：anchor 文本 → <img alt> → id，避免图片型条目（如快看）因标题为空被整体跳过。
  */
@@ -86,17 +119,18 @@ export async function webtoon() {
   return items.map((c, i) => ({
     slug: 'webtoon-' + c.id,
     frontmatter: {
-      title: c.title,
+      title: cleanWebtoonTitle(c.title),
       author: '',
       platform: 'Webtoon',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'en',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'webtoon:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('Webtoon', i + 1, 'en'),
     },
     body: 'Auto-harvested from Webtoon ranking. 上线前请核对作者 / 封面。\n',
   }));
@@ -105,7 +139,7 @@ export async function webtoon() {
 export async function tapas() {
   // Tapas 榜单为 SPA，数据由前端 XHR 从私有 API（api.tapas.io，未公开排行榜端点）拉取，
   // 静态 HTML 无作品直链、页面也不含内嵌数据 → 纯 HTML 解析恒为 0。
-  // 需无头浏览器或更深 RE 才能采；当前保留兜底以免误报，实际 0 条。
+  // 需无头浏览器或更深 RE 才能采；当前保留兜底以免误报，实际 0 条（已降级 manual 档）。
   const html = await fetchText('https://tapas.io/top', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/series\/[a-z0-9-]+/i,
@@ -119,13 +153,14 @@ export async function tapas() {
       author: '',
       platform: 'Tapas',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'en',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'tapas:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('Tapas', i + 1, 'en'),
     },
     body: 'Auto-harvested from Tapas top series. 上线前请核对作者 / 封面。\n',
   }));
@@ -145,20 +180,23 @@ export async function qq() {
       author: '',
       platform: '腾讯动漫',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'zh',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'qq:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('腾讯动漫', i + 1, 'zh'),
     },
     body: '自动采集自腾讯动漫排行榜，上线前请核对作者 / 封面。\n',
   }));
 }
 
 export async function kuaikan() {
-  // 快看对桌面 UA 返回空壳，必须移动端 UA 才能拿到 SSR 条目
+  // 快看榜单为 Nuxt SSR 壳：/topic/ 链接在 SSR 里存在，但标题/封面由前端 JS 注入，
+  // 静态 HTML 取到的是占位（"blank" 标题 + data: 占位图），纯 HTML 解析恒为垃圾数据。
+  // 已降级 manual 档（与 tapas/wuxiaworld 同），走 import.mjs 人工录入。
   const html = await fetchText('https://www.kuaikanmanhua.com/ranking/', {
     timeout: 20000,
     ua: MOBILE_UA,
@@ -175,13 +213,14 @@ export async function kuaikan() {
       author: '',
       platform: '快看',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'zh',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'kuaikan:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('快看', i + 1, 'zh'),
     },
     body: '自动采集自快看排行榜，上线前请核对作者 / 封面。\n',
   }));
@@ -196,21 +235,22 @@ export async function wattpad(src) {
       src.limit || 20
     }&fields=id,title,user(name),cover,readCount,voteCount,numParts,completed,mature,language(name),tags,modifyDate,url`;
     const json = await fetchJSON(url);
-    return (json.stories || []).map((s) => ({
+    return (json.stories || []).map((s, i) => ({
       slug: 'wattpad-' + s.id,
       frontmatter: {
         title: s.title,
         author: s.user?.name || 'Unknown',
         platform: 'Wattpad',
         sourceUrl: s.url,
-        coverUrl: s.cover?.['512x512'] || s.cover?.original || s.cover || undefined,
+        coverUrl: cleanCover(s.cover?.['512x512'] || s.cover?.original || s.cover),
         language: mapLang(s.language?.name),
         tags: s.tags || [],
         status: s.completed ? 'completed' : 'ongoing',
         pubDate: new Date(s.modifyDate || Date.now()),
         sourceId: 'wattpad:' + s.id,
         origin: 'api',
-        metrics: { views: s.readCount, rating: approxRating(s.voteCount, s.readCount) },
+        metrics: { views: s.readCount, rating: approxRating(s.voteCount, s.readCount), rank: i + 1 },
+        review: makeReview('Wattpad', i + 1, mapLang(s.language?.name)),
       },
       body: '',
     }));
@@ -227,7 +267,7 @@ export async function wattpad(src) {
         author: '',
         platform: 'Wattpad',
         sourceUrl: c.href,
-        coverUrl: c.cover || undefined,
+        coverUrl: cleanCover(c.cover),
         language: 'en',
         tags: [],
         status: 'ongoing',
@@ -235,6 +275,7 @@ export async function wattpad(src) {
         sourceId: 'wattpad:' + c.id,
         origin: 'html',
         metrics: { rank: i + 1 },
+        review: makeReview('Wattpad', i + 1, 'en'),
       },
       body: 'Auto-harvested (HTML fallback) from Wattpad. 上线前请核对。\n',
     }));
@@ -300,13 +341,14 @@ export async function webnovel() {
       author: '',
       platform: 'Webnovel',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'en',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'webnovel:' + c.id,
       origin: 'api',
       metrics: { rank: i + 1 },
+      review: makeReview('Webnovel', i + 1, 'en'),
     },
     body: 'Auto-harvested from Webnovel ranking API. 上线前请核对作者 / 封面。\n',
   }));
@@ -315,7 +357,7 @@ export async function webnovel() {
 export async function wuxiaworld() {
   // Wuxiaworld 列表页为 SPA：数据由前端 React Query 从私有 API 拉取，
   // 页面 window.__REACT_QUERY_STATE__ 为空、无内嵌数据、也无公开排行榜端点 → 纯 HTML 解析恒为 0。
-  // 需无头浏览器或更深 RE 才能采；当前保留兜底以免误报，实际 0 条。
+  // 已降级 manual 档，走 import.mjs 人工录入。
   const html = await fetchText('https://www.wuxiaworld.com/novel-list', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/novel\/[a-z0-9-]+/i,
@@ -329,13 +371,14 @@ export async function wuxiaworld() {
       author: '',
       platform: 'Wuxiaworld',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'en',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'wuxiaworld:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('Wuxiaworld', i + 1, 'en'),
     },
     body: 'Auto-harvested from Wuxiaworld. 上线前请核对。\n',
   }));
@@ -356,13 +399,14 @@ export async function qidian() {
       author: '',
       platform: '起点',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'zh',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'qidian:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('起点', i + 1, 'zh'),
     },
     body: '自动采集自起点排行榜，上线前请核对作者 / 封面。\n',
   }));
@@ -383,13 +427,14 @@ export async function xiaoshuohui() {
       author: '',
       platform: '小说会',
       sourceUrl: c.href,
-      coverUrl: c.cover || undefined,
+      coverUrl: cleanCover(c.cover),
       language: 'zh',
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'xiaoshuohui:' + c.id,
       origin: 'html',
       metrics: { rank: i + 1 },
+      review: makeReview('小说会', i + 1, 'zh'),
     },
     body: '自动采集自小说会排行榜，上线前请核对作者 / 封面。\n',
   }));

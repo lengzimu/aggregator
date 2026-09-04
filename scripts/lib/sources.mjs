@@ -4,9 +4,11 @@
 // 3) threshold：实现"点击量高 / 评分高 / 增长快"的收录门槛（满足其一即可）。
 //
 // 档位判定以实测为准（非假设）：
-//   · html 能稳定出数：webtoon / qq(腾讯动漫) / kuaikan(快看, 需移动端 UA)
+//   · html 能稳定出数（标题/封面干净）：webtoon / qq(腾讯动漫)
 //   · api 直采：wattpad(公开 API) / webnovel(排行榜 JSON 接口，待 CI 验证)
-//   · manual（SPA 或强反爬，纯 HTML 解析恒为 0）：tapas / wuxiaworld / mankezhan(漫客栈) / fanqie(番茄)
+//   · html 但实质 SPA/SSR 壳（纯 HTML 解析恒为垃圾或 0）：kuaikan(快看, Nuxt 壳占位) /
+//     tapas / wuxiaworld → 与 mankezhan(漫客栈) / fanqie(番茄) 同列 manual，走 import.mjs
+//   · html 待定：qidian(起点) / xiaoshuohui(小说会) 强反爬，CI 若恒 0 则降级 manual
 
 export const SOURCES = [
   {
@@ -14,7 +16,7 @@ export const SOURCES = [
     tier: 'html', adapter: 'webtoon', language: 'en', limit: 20,
     hosts: ['webtoons.com'],
     threshold: { maxRank: 20, minRating: 8.5, minViews: 1_000_000 },
-    note: 'Webtoon 公开榜单页可解析；取 TOP20，或评分≥8.5，或订阅≥百万',
+    note: 'Webtoon 公开榜单页可解析（标题需清洗排名前缀噪声）；取 TOP20，或评分≥8.5，或订阅≥百万',
   },
   {
     key: 'tapas', platform: 'Tapas', collection: 'comics',
@@ -28,14 +30,14 @@ export const SOURCES = [
     tier: 'html', adapter: 'qq', language: 'zh', limit: 20,
     hosts: ['ac.qq.com', 'qq.com'],
     threshold: { maxRank: 30 },
-    note: '腾讯动漫排行榜（ac.qq.com/Rank/comicRank），桌面 UA',
+    note: '腾讯动漫排行榜（ac.qq.com/Rank/comicRank），桌面 UA，标题干净',
   },
   {
     key: 'kuaikan', platform: '快看', collection: 'comics',
-    tier: 'html', adapter: 'kuaikan', language: 'zh', limit: 20,
+    tier: 'manual', adapter: null, language: 'zh',
     hosts: ['kuaikanmanhua.com'],
     threshold: { maxRank: 30 },
-    note: '快看排行榜（kuaikanmanhua.com/ranking/），必须移动端 UA',
+    note: '快看榜单为 Nuxt SSR 壳：/topic/ 链接存在但标题/封面由前端 JS 注入，纯 HTML 取到占位("blank"+data:图)；降级 manual',
   },
   {
     key: 'mankezhan', platform: '漫客栈', collection: 'comics',
