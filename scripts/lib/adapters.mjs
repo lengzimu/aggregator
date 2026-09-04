@@ -3,9 +3,9 @@
 // 每个适配器返回：{ slug, frontmatter, body }[]
 // frontmatter 字段与 src/content/config.ts 的 Schema 对齐。
 //
-// 重要：解析是基于公开榜单页 HTML 的"尽力而为"实现。各站会改版，
+// 重要：解析是基于公开榜单页 HTML / 接口的"尽力而为"实现。各站会改版，
 // 因此每条采集结果都会先落盘到 data/pending/ 待人工复核，绝不直接进 src/content。
-import { fetchText, fetchJSON, MOBILE_UA } from './fetch.mjs';
+import { fetchText, fetchJSON, DESKTOP_UA, MOBILE_UA } from './fetch.mjs';
 
 /* ----------------------------- 通用解析工具 ----------------------------- */
 
@@ -41,6 +41,12 @@ function mapLang(name = '') {
 function approxRating(votes, reads) {
   if (!votes || !reads) return undefined;
   return Math.min(10, Math.round((votes / reads) * 100 * 100) / 100);
+}
+
+/** 从对象里按候选键名取第一个非空值（兼容不同站字段命名） */
+function pick(obj, keys) {
+  for (const k of keys) if (obj[k] != null && obj[k] !== '') return obj[k];
+  return undefined;
 }
 
 /**
@@ -97,8 +103,9 @@ export async function webtoon() {
 }
 
 export async function tapas() {
-  // 注意：Tapas 榜单页是 SPA，静态 HTML 不含作品直链，纯 HTML 解析会得 0 条。
-  // 真实采集需走 Tapas 内部 API（待接入）；此处先指向可达页面，避免 404 误报。
+  // Tapas 榜单为 SPA，数据由前端 XHR 从私有 API（api.tapas.io，未公开排行榜端点）拉取，
+  // 静态 HTML 无作品直链、页面也不含内嵌数据 → 纯 HTML 解析恒为 0。
+  // 需无头浏览器或更深 RE 才能采；当前保留兜底以免误报，实际 0 条。
   const html = await fetchText('https://tapas.io/top', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/series\/[a-z0-9-]+/i,
@@ -235,14 +242,57 @@ export async function wattpad(src) {
 }
 
 export async function webnovel() {
-  // Webnovel 榜单为 SPA（/rank 静态页无作品直链），真实采集需走其接口（待接入）。
-  // 此处保留 HTML 兜底以便将来接 API 后切换；当前多半为 0 条。
-  const html = await fetchText('https://www.webnovel.com/rank', { timeout: 20000 });
-  const items = collectByAnchor(html, {
-    hrefRe: /\/book\/\d+/i,
-    idRe: /\/book\/(\d+)/i,
-    host: 'https://www.webnovel.com',
-  });
+  // Webnovel 榜单为 SPA，走其 JSON 接口 /go/pcm/category/getRankList（第三方已验证可用）。
+  // 该接口需要 _csrfToken：先从榜单页取 set-cookie 里的 _csrfToken，再带 cookie 调接口。
+  // 注：本适配器未经沙箱验证（webnovel 在本环境出口被拦），需在 CI / 开放网络复测。
+  const rankPage = 'https://www.webnovel.com/ranking/novel/all_time/popular_rank';
+  let csrf = '';
+  let cookie = '';
+  try {
+    const pageRes = await fetch(rankPage, {
+      headers: { 'User-Agent': DESKTOP_UA },
+      redirect: 'follow',
+    });
+    const sc = pageRes.headers.get('set-cookie') || '';
+    const m = sc.match(/_csrfToken=([^;]+)/);
+    if (m) csrf = m[1];
+    cookie = sc;
+  } catch {
+    /* 取不到 token 时仍尝试不带 token 调用 */
+  }
+
+  const api = new URL('https://www.webnovel.com/go/pcm/category/getRankList');
+  const params = {
+    _csrfToken: csrf,
+    pageIndex: '1',
+    rankId: 'popular_rank',
+    listType: '0',
+    type: '1',
+    rankName: 'Popular',
+    timeType: '3',
+    sourceType: '2',
+    sex: '1',
+  };
+  Object.entries(params).forEach(([k, v]) => api.searchParams.set(k, v));
+
+  const headers = {
+    'User-Agent': DESKTOP_UA,
+    Accept: 'application/json, text/javascript, */*; q=0.01',
+    Referer: rankPage,
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  if (cookie) headers.Cookie = cookie;
+
+  const json = await fetchJSON(api.toString(), { headers });
+  const items = (json?.data?.bookItems || [])
+    .map((b) => {
+      const id = String(pick(b, ['bookId', 'id', 'bookIdStr']) ?? '');
+      const title = pick(b, ['bookName', 'name', 'title']) || '';
+      const url = pick(b, ['bookUrl', 'url', 'bookLink']) || `https://www.webnovel.com/book/${id}`;
+      const cover = pick(b, ['coverUrl', 'bookCover', 'cover']) || '';
+      return { id, href: url, title, cover };
+    })
+    .filter((c) => c.id);
   return items.map((c, i) => ({
     slug: 'webnovel-' + c.id,
     frontmatter: {
@@ -255,16 +305,17 @@ export async function webnovel() {
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'webnovel:' + c.id,
-      origin: 'html',
+      origin: 'api',
       metrics: { rank: i + 1 },
     },
-    body: 'Auto-harvested from Webnovel ranking. 上线前请核对作者 / 封面。\n',
+    body: 'Auto-harvested from Webnovel ranking API. 上线前请核对作者 / 封面。\n',
   }));
 }
 
 export async function wuxiaworld() {
-  // Wuxiaworld 列表页为 SPA（静态 HTML 不含 /novel/ 直链），纯 HTML 解析会得 0 条。
-  // 真实采集需解析其内嵌 JSON 或接口（待接入）。
+  // Wuxiaworld 列表页为 SPA：数据由前端 React Query 从私有 API 拉取，
+  // 页面 window.__REACT_QUERY_STATE__ 为空、无内嵌数据、也无公开排行榜端点 → 纯 HTML 解析恒为 0。
+  // 需无头浏览器或更深 RE 才能采；当前保留兜底以免误报，实际 0 条。
   const html = await fetchText('https://www.wuxiaworld.com/novel-list', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/novel\/[a-z0-9-]+/i,
