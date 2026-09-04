@@ -5,7 +5,7 @@
 //
 // 重要：解析是基于公开榜单页 HTML 的"尽力而为"实现。各站会改版，
 // 因此每条采集结果都会先落盘到 data/pending/ 待人工复核，绝不直接进 src/content。
-import { fetchText, fetchJSON } from './fetch.mjs';
+import { fetchText, fetchJSON, MOBILE_UA } from './fetch.mjs';
 
 /* ----------------------------- 通用解析工具 ----------------------------- */
 
@@ -43,7 +43,10 @@ function approxRating(votes, reads) {
   return Math.min(10, Math.round((votes / reads) * 100 * 100) / 100);
 }
 
-/** 从一批 anchor 中按平台 id 正则去重，提取 {id, href, title, cover} */
+/**
+ * 从一批 anchor 中按平台 id 正则去重，提取 {id, href, title, cover}。
+ * 标题优先级：anchor 文本 → <img alt> → id，避免图片型条目（如快看）因标题为空被整体跳过。
+ */
 function collectByAnchor(html, { hrefRe, idRe, host = '' }) {
   const anchors = allAnchors(html).filter((a) => hrefRe.test(attr(a.attrs, 'href')));
   const seen = new Set();
@@ -52,8 +55,10 @@ function collectByAnchor(html, { hrefRe, idRe, host = '' }) {
     let href = attr(a.attrs, 'href');
     if (!/^https?:/i.test(href)) href = host + href;
     const id = (href.match(idRe) || [])[1];
-    const title = stripTags(a.inner).slice(0, 80);
-    if (!id || !title || seen.has(id)) continue;
+    if (!id || seen.has(id)) continue;
+    const textTitle = stripTags(a.inner).slice(0, 80);
+    const altTitle = (a.inner.match(/alt="([^"]*)"/i) || [])[1] || '';
+    const title = (textTitle || altTitle || id).trim();
     seen.add(id);
     items.push({ id, href, title, cover: imgSrc(a.inner) });
   }
@@ -92,7 +97,9 @@ export async function webtoon() {
 }
 
 export async function tapas() {
-  const html = await fetchText('https://tapas.io/series?sort=READ_COUNT_DESC', { timeout: 20000 });
+  // 注意：Tapas 榜单页是 SPA，静态 HTML 不含作品直链，纯 HTML 解析会得 0 条。
+  // 真实采集需走 Tapas 内部 API（待接入）；此处先指向可达页面，避免 404 误报。
+  const html = await fetchText('https://tapas.io/top', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/series\/[a-z0-9-]+/i,
     idRe: /\/series\/([a-z0-9-]+)/i,
@@ -118,7 +125,7 @@ export async function tapas() {
 }
 
 export async function qq() {
-  const html = await fetchText('https://ac.qq.com/rank', { timeout: 20000 });
+  const html = await fetchText('https://ac.qq.com/Rank/comicRank', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /Comic\/comicInfo\/id\/\d+/i,
     idRe: /id\/(\d+)/i,
@@ -144,7 +151,11 @@ export async function qq() {
 }
 
 export async function kuaikan() {
-  const html = await fetchText('https://www.kuaikanmanhua.com/rank', { timeout: 20000 });
+  // 快看对桌面 UA 返回空壳，必须移动端 UA 才能拿到 SSR 条目
+  const html = await fetchText('https://www.kuaikanmanhua.com/ranking/', {
+    timeout: 20000,
+    ua: MOBILE_UA,
+  });
   const items = collectByAnchor(html, {
     hrefRe: /\/topic\/\d+/i,
     idRe: /\/topic\/(\d+)/i,
@@ -224,6 +235,8 @@ export async function wattpad(src) {
 }
 
 export async function webnovel() {
+  // Webnovel 榜单为 SPA（/rank 静态页无作品直链），真实采集需走其接口（待接入）。
+  // 此处保留 HTML 兜底以便将来接 API 后切换；当前多半为 0 条。
   const html = await fetchText('https://www.webnovel.com/rank', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/book\/\d+/i,
@@ -250,7 +263,9 @@ export async function webnovel() {
 }
 
 export async function wuxiaworld() {
-  const html = await fetchText('https://www.wuxiaworld.com/', { timeout: 20000 });
+  // Wuxiaworld 列表页为 SPA（静态 HTML 不含 /novel/ 直链），纯 HTML 解析会得 0 条。
+  // 真实采集需解析其内嵌 JSON 或接口（待接入）。
+  const html = await fetchText('https://www.wuxiaworld.com/novel-list', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /\/novel\/[a-z0-9-]+/i,
     idRe: /\/novel\/([a-z0-9-]+)/i,
@@ -275,6 +290,60 @@ export async function wuxiaworld() {
   }));
 }
 
+export async function qidian() {
+  // 起点强反爬（腾讯），静态 HTML 解析大概率 0 条，需 API / 移动端；此处先尽力而为。
+  const html = await fetchText('https://www.qidian.com/rank/', { timeout: 20000, ua: MOBILE_UA });
+  const items = collectByAnchor(html, {
+    hrefRe: /\/(?:book|info)\/\d+/i,
+    idRe: /\/(?:book|info)\/(\d+)/i,
+    host: 'https://www.qidian.com',
+  });
+  return items.map((c, i) => ({
+    slug: 'qidian-' + c.id,
+    frontmatter: {
+      title: c.title,
+      author: '',
+      platform: '起点',
+      sourceUrl: c.href,
+      coverUrl: c.cover || undefined,
+      language: 'zh',
+      status: 'ongoing',
+      pubDate: new Date(),
+      sourceId: 'qidian:' + c.id,
+      origin: 'html',
+      metrics: { rank: i + 1 },
+    },
+    body: '自动采集自起点排行榜，上线前请核对作者 / 封面。\n',
+  }));
+}
+
+export async function xiaoshuohui() {
+  // 小说会排行榜；链接形态待 CI 验证，先以常见 /book|/novel|/info/<id> 模式尽力解析。
+  const html = await fetchText('https://www.xiaoshuohui.com.cn/top/', { timeout: 20000, ua: MOBILE_UA });
+  const items = collectByAnchor(html, {
+    hrefRe: /\/(?:book|novel|info)\/\d+/i,
+    idRe: /\/(?:book|novel|info)\/(\d+)/i,
+    host: 'https://www.xiaoshuohui.com.cn',
+  });
+  return items.map((c, i) => ({
+    slug: 'xiaoshuohui-' + c.id,
+    frontmatter: {
+      title: c.title,
+      author: '',
+      platform: '小说会',
+      sourceUrl: c.href,
+      coverUrl: c.cover || undefined,
+      language: 'zh',
+      status: 'ongoing',
+      pubDate: new Date(),
+      sourceId: 'xiaoshuohui:' + c.id,
+      origin: 'html',
+      metrics: { rank: i + 1 },
+    },
+    body: '自动采集自小说会排行榜，上线前请核对作者 / 封面。\n',
+  }));
+}
+
 export const ADAPTERS = {
   webtoon,
   tapas,
@@ -283,4 +352,6 @@ export const ADAPTERS = {
   wattpad,
   webnovel,
   wuxiaworld,
+  qidian,
+  xiaoshuohui,
 };

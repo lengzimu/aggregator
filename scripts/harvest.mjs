@@ -8,7 +8,7 @@
 // 注意：短视频（抖音/TikTok）不在此列——其平台禁止抓取，需人工录入。
 import { SOURCES } from './lib/sources.mjs';
 import { ADAPTERS } from './lib/adapters.mjs';
-import { toFrontmatter, writePending } from './lib/markdown.mjs';
+import { toJson, writePending } from './lib/markdown.mjs';
 
 const only = process.argv.includes('--only')
   ? process.argv[process.argv.indexOf('--only') + 1]
