@@ -1,7 +1,12 @@
 // 平台注册表 —— 采集层唯一事实来源。
 // 1) hosts 白名单：sourceUrl 的主机必须命中，否则拒绝入库（版权安全，只收正版）。
-// 2) tier：api=接口直采 / html=榜单页解析 / manual=反爬强，走 import.mjs 半自动录入。
+// 2) tier：api=接口直采 / html=榜单页解析 / manual=反爬强或 SPA，走 import.mjs 半自动录入。
 // 3) threshold：实现"点击量高 / 评分高 / 增长快"的收录门槛（满足其一即可）。
+//
+// 档位判定以实测为准（非假设）：
+//   · html 能稳定出数：webtoon / qq(腾讯动漫) / kuaikan(快看, 需移动端 UA)
+//   · api 直采：wattpad(公开 API) / webnovel(排行榜 JSON 接口，待 CI 验证)
+//   · manual（SPA 或强反爬，纯 HTML 解析恒为 0）：tapas / wuxiaworld / mankezhan(漫客栈) / fanqie(番茄)
 
 export const SOURCES = [
   {
@@ -13,10 +18,10 @@ export const SOURCES = [
   },
   {
     key: 'tapas', platform: 'Tapas', collection: 'comics',
-    tier: 'html', adapter: 'tapas', language: 'en', limit: 20,
+    tier: 'manual', adapter: null, language: 'en',
     hosts: ['tapas.io'],
     threshold: { maxRank: 20 },
-    note: 'Tapas 榜单为 SPA，静态 HTML 无作品直链；当前 0 条，待接内部 API',
+    note: 'Tapas 榜单为 SPA，数据由前端私有 API 拉取，纯 HTML 解析恒为 0；降级 manual，走 import.mjs 人工录入',
   },
   {
     key: 'qq', platform: '腾讯动漫', collection: 'comics',
@@ -43,21 +48,21 @@ export const SOURCES = [
     tier: 'api', adapter: 'wattpad', language: 'en', limit: 20,
     hosts: ['wattpad.com'],
     threshold: { minViews: 100_000, minRating: 8.0 },
-    note: 'Wattpad 公开 API（api.wattpad.com/v3）；HTML 回退',
+    note: 'Wattpad 公开 API（api.wattpad.com/v3）；HTML 回退。沙箱出口拦，CI 开放网络应正常',
   },
   {
     key: 'webnovel', platform: 'Webnovel', collection: 'novels',
-    tier: 'html', adapter: 'webnovel', language: 'en', limit: 20,
+    tier: 'api', adapter: 'webnovel', language: 'en', limit: 20,
     hosts: ['webnovel.com'],
     threshold: { maxRank: 30 },
-    note: 'Webnovel /rank 为 SPA，待接接口；当前大概率 0 条',
+    note: 'Webnovel 排行榜 JSON 接口 /go/pcm/category/getRankList（需 _csrfToken）；待 CI 验证',
   },
   {
     key: 'wuxiaworld', platform: 'Wuxiaworld', collection: 'novels',
-    tier: 'html', adapter: 'wuxiaworld', language: 'en', limit: 20,
+    tier: 'manual', adapter: null, language: 'en',
     hosts: ['wuxiaworld.com'],
     threshold: { maxRank: 30 },
-    note: 'Wuxiaworld 列表页为 SPA，待解析内嵌 JSON 或接口',
+    note: 'Wuxiaworld 列表页为 SPA，前端私有 API 拉取、页面无内嵌数据，纯 HTML 解析恒为 0；降级 manual',
   },
   {
     key: 'fanqie', platform: '番茄小说', collection: 'novels',
@@ -70,14 +75,14 @@ export const SOURCES = [
     tier: 'html', adapter: 'qidian', language: 'zh', limit: 20,
     hosts: ['qidian.com', 'www.qidian.com', 'book.qidian.com'],
     threshold: { maxRank: 30 },
-    note: '起点排行榜（qidian.com/rank）；强反爬，可能需 API/移动端，待 CI 调',
+    note: '起点排行榜（qidian.com/rank）；强反爬，可能需 API/移动端，待 CI 验证；若恒 0 则降级 manual',
   },
   {
     key: 'xiaoshuohui', platform: '小说会', collection: 'novels',
     tier: 'html', adapter: 'xiaoshuohui', language: 'zh', limit: 20,
     hosts: ['xiaoshuohui.com.cn', 'www.xiaoshuohui.com.cn'],
     threshold: { maxRank: 30 },
-    note: '小说会排行榜（xiaoshuohui.com.cn/top）；待 CI 验证解析',
+    note: '小说会排行榜（xiaoshuohui.com.cn/top）；待 CI 验证解析；若恒 0 则降级 manual',
   },
 ];
 
