@@ -6,9 +6,10 @@
 // 档位判定以实测为准（非假设）：
 //   · html 稳定出数（榜单页可解析；封面按需进详情页取）：webtoon / qq(腾讯动漫) / mkzhan(漫客栈) / kuaikan(快看,封面为JS注入留空)
 //   · html 海外小说：royalroad(英文原创,含封面)
-//   · api 直采：wattpad(公开 API,空 stories 时回退 HTML) / webnovel(排行榜 JSON 接口,需 set-cookie 里的 _csrfToken)
+//   · api 直采：wattpad(公开 API,失败回退 /stories/<分类>/hot 多候选 HTML)
 //   · html：xiaoshuohui(小说会 /top/popularity/，条目为 /<id>/ 相对链接)
 //   · 已移除：qidian(起点) —— 强反爬恒 0，按用户要求取消自动采集
+//   · 已降级 manual：webnovel —— 对数据中心 IP 整站封锁（CI 榜单页也 403），自动采集无解
 //   · manual（纯 HTML 解析恒为 0 或反爬强）：tapas / wuxiaworld(均为 SPA) / fanqie(番茄) → 走 import.mjs
 
 export const SOURCES = [
@@ -51,8 +52,8 @@ export const SOURCES = [
     key: 'wattpad', platform: 'Wattpad', collection: 'novels',
     tier: 'api', adapter: 'wattpad', language: 'en', limit: 20,
     hosts: ['wattpad.com'],
-    threshold: { minViews: 100_000, minRating: 8.0 },
-    note: 'Wattpad 公开 API（api.wattpad.com/v3）；失败回退 /stories/<分类>/hot 多候选路径（旧 /stories/hot 已 404）；沙箱不可达，CI 验证',
+    threshold: { maxRank: 20, minViews: 100_000, minRating: 8.0 },
+    note: 'Wattpad 公开 API（api.wattpad.com/v3）；失败回退 /stories/<分类>/hot 多候选路径（旧 /stories/hot 已 404，CI 实测回退可出数 27 条）；沙箱不可达，CI 验证',
   },
   {
     key: 'webnovel', platform: 'Webnovel', collection: 'novels',
