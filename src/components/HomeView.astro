@@ -21,7 +21,8 @@ const [videos, comics, novels] = await Promise.all([
 ]);
 
 const latestVideos = sortEntries(byLang(videos, lang), 'latest').slice(0, 4);
-const latestComics = sortEntries(byLang(comics, lang), 'rating').slice(0, 4);
+// 人气漫画：按源平台真实榜单名次排序（rank 越小越火），不再用 rating（绝大多数漫画无评分导致排序失真）
+const latestComics = sortEntries(byLang(comics, lang), 'rank').slice(0, 4);
 const latestNovels = sortEntries(byLang(novels, lang), 'rating').slice(0, 4);
 
 // 本周新增：给爬虫一个持续回访的理由（7 天内有新收录才展示，无则整块隐藏）

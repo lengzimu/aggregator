@@ -2,7 +2,7 @@ import type { CollectionEntry } from 'astro:content';
 import { platformSlug, formatCount, type Lang } from '../i18n/ui.ts';
 
 export type AnyEntry = CollectionEntry<'videos' | 'comics' | 'novels'>;
-export type SortKey = 'latest' | 'hot' | 'rating' | 'growth';
+export type SortKey = 'latest' | 'hot' | 'rating' | 'growth' | 'rank';
 
 type Metrics = {
   views?: number;
@@ -45,6 +45,12 @@ export function sortEntries<T extends AnyEntry>(entries: T[], sort: SortKey = 'l
         const ag = m(a).growth ?? missing;
         const bg = m(b).growth ?? missing;
         return bg - ag;
+      }
+      case 'rank': {
+        // 榜单名次：越小越火（#1 排最前）；缺 rank 的条目沉到末尾。
+        const ar = m(a).rank ?? Number.POSITIVE_INFINITY;
+        const br = m(b).rank ?? Number.POSITIVE_INFINITY;
+        return ar - br;
       }
       case 'latest':
       default:
