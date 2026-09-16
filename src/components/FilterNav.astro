@@ -1,13 +1,17 @@
 ---
-import { platformName, useTranslations, type Lang } from '../i18n/ui.ts';
-import { defaultLang } from '../i18n/ui.ts';
+import { platformName, useTranslations, type Lang, defaultLang, localizedPath } from '../i18n/ui.ts';
+import { listBasePath } from '../lib/content.ts';
 
 interface Props {
   platforms: string[];
   lang?: Lang;
+  /** 当前分类（videos/comics/novels），用于拼平台页真实链接 */
+  type: 'videos' | 'comics' | 'novels';
+  /** 当前选中的平台原名；未传 = 全部 */
+  active?: string;
 }
 
-const { platforms, lang = defaultLang } = Astro.props;
+const { platforms, lang = defaultLang, type, active } = Astro.props;
 const t = useTranslations(lang);
 
 const sortOptions = [
@@ -16,26 +20,36 @@ const sortOptions = [
   { value: 'rating', label: t('sort.rating') },
   { value: 'growth', label: t('sort.growth') },
 ];
+
+const allHref = localizedPath(`/${type}/`, lang);
 ---
 
 <div class="mb-6 flex flex-wrap items-center gap-3">
   <div class="filter-nav flex flex-wrap items-center gap-2">
-    <button
-      type="button"
-      data-filter="all"
-      class="filter-btn rounded-full border border-brand-600 bg-brand-600 px-4 py-1.5 text-sm font-medium text-white transition-colors"
+    <a
+      href={allHref}
+      class:list={[
+        'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+        !active
+          ? 'border-brand-600 bg-brand-600 text-white'
+          : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700',
+      ]}
     >
       {t('filter.all')}
-    </button>
+    </a>
     {
       platforms.map((p) => (
-        <button
-          type="button"
-          data-filter={p}
-          class="filter-btn rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700"
+        <a
+          href={listBasePath(lang, type, p)}
+          class:list={[
+            'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+            active === p
+              ? 'border-brand-600 bg-brand-600 text-white'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700',
+          ]}
         >
           {platformName(p, lang)}
-        </button>
+        </a>
       ))
     }
   </div>
@@ -53,26 +67,8 @@ const sortOptions = [
 
 <script is:inline>
   (function () {
-    var buttons = document.querySelectorAll('.filter-btn');
     var cards = Array.prototype.slice.call(document.querySelectorAll('[data-card]'));
     var select = document.getElementById('sort-select');
-
-    function applyFilter(filter) {
-      buttons.forEach(function (btn) {
-        var active = btn.getAttribute('data-filter') === filter;
-        btn.classList.toggle('border-brand-600', active);
-        btn.classList.toggle('bg-brand-600', active);
-        btn.classList.toggle('text-white', active);
-        btn.classList.toggle('border-slate-200', !active);
-        btn.classList.toggle('bg-white', !active);
-        btn.classList.toggle('text-slate-700', !active);
-      });
-
-      cards.forEach(function (card) {
-        var match = filter === 'all' || card.getAttribute('data-platform') === filter;
-        card.style.display = match ? '' : 'none';
-      });
-    }
 
     function num(el, key) {
       var v = parseFloat(el.getAttribute(key));
@@ -94,12 +90,6 @@ const sortOptions = [
         container.appendChild(card);
       });
     }
-
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        applyFilter(btn.getAttribute('data-filter') || 'all');
-      });
-    });
 
     if (select) {
       select.addEventListener('change', function () {

@@ -26,8 +26,14 @@ function stripTags(s) {
   return String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * 取 <img> 的图片地址：优先 data-src（懒加载站的真实图），
+ * 其次 src（部分站 src 是占位小图，如小说会的 lazy_bg 占位图）。
+ */
 function imgSrc(inner) {
-  const m = inner.match(/<img\b[^>]*?(?:src|data-src)="([^"]+)"/i);
+  const lazy = inner.match(/<img\b[^>]*?data-src="([^"]+)"/i);
+  if (lazy) return lazy[1];
+  const m = inner.match(/<img\b[^>]*?src="([^"]+)"/i);
   return m ? m[1] : '';
 }
 
@@ -117,7 +123,7 @@ function collectByAnchor(html, { hrefRe, idRe, host = '' }) {
     if (seen.has(id)) {
       const prev = items.find((x) => x.id === id);
       if (prev) {
-        if (!prev.title && title && title !== id) prev.title = title;
+        if ((!prev.title || prev.title === prev.id) && title && title !== id) prev.title = title;
         if (!prev.cover && cover) prev.cover = cover;
       }
       continue;
@@ -140,7 +146,7 @@ async function mapLimit(arr, limit, fn) {
 }
 
 /** 腾讯动漫详情页封面：manhua.acimg.cn 的 vertical 封面（榜单页无封面，必须进详情页取） */
-async function qqCover(id) {
+export async function qqCover(id) {
   try {
     const html = await fetchText(`https://ac.qq.com/Comic/comicInfo/id/${id}`, { timeout: 15000 });
     const all = [...html.matchAll(/https?:\/\/manhua\.acimg\.cn\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi)].map((x) => x[0]);
@@ -152,7 +158,7 @@ async function qqCover(id) {
 }
 
 /** 漫客栈详情页封面：oss.mkzcdn.com/comic/cover/...（榜单页封面为懒加载，需进详情页取） */
-async function mkzhanCover(id) {
+export async function mkzhanCover(id) {
   try {
     const html = await fetchText(`https://www.mkzhan.com/${id}/`, { timeout: 15000 });
     const m = html.match(/https?:\/\/oss\.mkzcdn\.com\/comic\/cover\/[^\s"'<>]+/i);
@@ -257,7 +263,8 @@ export async function qq() {
 
 export async function kuaikan() {
   // 快看排行榜 /ranking/9 为 Nuxt 渲染：anchor 文本含真实标题（"完美敌人" 等），
-  // 但封面是前端 JS 注入的 data: 占位图，静态 HTML 取不到 → 封面留空，人工补全。
+  // 但封面是前端 JS 经鉴权 XHR 注入——静态 HTML / 详情页 / 公开 API（pweb 返回空 data）
+  // 均取不到真实封面 URL → 封面留空走 default-cover 兜底，人工经 import 补全。
   const html = await fetchText('https://www.kuaikanmanhua.com/ranking/9', {
     timeout: 20000,
     ua: MOBILE_UA,
@@ -321,13 +328,17 @@ export async function mkzhan() {
 /* ------------------------------- 小说适配器 ------------------------------ */
 
 export async function wattpad(src) {
-  // 优先走公开 API；不可达时回退到榜单页解析（Wattpad 在 CI / 真实服务器通常可达）。
+  // 优先走公开 API；返回空/报错时回退到榜单页解析。
+  // 实测（CI 开放网络）：api.wattpad.com 可能返回 200 但 body 是错误对象（无 stories 字段，
+  // 如要求 api-key），此时必须视为失败走 HTML 回退，否则 fetched 恒为 0 且无报错。
   try {
     const url = `https://api.wattpad.com/api/v3/stories?filter=hot&limit=${
       src.limit || 20
     }&fields=id,title,user(name),cover,readCount,voteCount,numParts,completed,mature,language(name),tags,modifyDate,url`;
     const json = await fetchJSON(url);
-    return (json.stories || []).map((s, i) => ({
+    const stories = json?.stories || [];
+    if (!stories.length) throw new Error('wattpad api 返回空 stories（可能需 api-key）');
+    return stories.map((s, i) => ({
       slug: 'wattpad-' + s.id,
       frontmatter: {
         title: s.title,
@@ -347,10 +358,12 @@ export async function wattpad(src) {
       body: '',
     }));
   } catch {
+    // HTML 回退：榜单页 story 链接可能是相对路径 /story/<id>，正则不能要求域名前缀
     const html = await fetchText('https://www.wattpad.com/stories/hot', { timeout: 20000 });
     const items = collectByAnchor(html, {
-      hrefRe: /wattpad\.com\/story\/\d+/i,
+      hrefRe: /story\/\d+/i,
       idRe: /story\/(\d+)/i,
+      host: 'https://www.wattpad.com',
     });
     return items.map((c, i) => ({
       slug: 'wattpad-' + c.id,
@@ -374,24 +387,49 @@ export async function wattpad(src) {
   }
 }
 
+/** 把响应的 set-cookie 收集成请求可用的 "k=v; k2=v2" 形式（Node fetch 的 get('set-cookie') 不可靠，用 getSetCookie） */
+function cookieJar(res) {
+  const raw =
+    typeof res.headers.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : String(res.headers.get('set-cookie') || '').split(/,(?=[^;]+?=)/);
+  const jar = [];
+  for (const c of raw) {
+    const kv = String(c).split(';')[0].trim();
+    if (kv.includes('=')) jar.push(kv);
+  }
+  return [...new Set(jar)];
+}
+
 export async function webnovel() {
-  // Webnovel 榜单为 SPA，走其 JSON 接口 /go/pcm/category/getRankList（第三方已验证可用）。
-  // 该接口需要 _csrfToken：先从榜单页取 set-cookie 里的 _csrfToken，再带 cookie 调接口。
-  // 注：本适配器未经沙箱验证（webnovel 在本环境出口被拦），需在 CI / 开放网络复测。
+  // Webnovel 榜单为 SPA，走其 JSON 接口 /go/pcm/category/getRankList。
+  // 接口要求有效 _csrfToken（CI 实测：空 token 恒 403）。token 在任意页面响应的
+  // set-cookie 里，注意必须用 headers.getSetCookie() 读取——Node fetch 的
+  // headers.get('set-cookie') 在部分版本/网关下返回空，这正是此前 CI 403 的根因。
   const rankPage = 'https://www.webnovel.com/ranking/novel/all_time/popular_rank';
   let csrf = '';
   let cookie = '';
-  try {
-    const pageRes = await fetch(rankPage, {
-      headers: { 'User-Agent': DESKTOP_UA },
-      redirect: 'follow',
-    });
-    const sc = pageRes.headers.get('set-cookie') || '';
-    const m = sc.match(/_csrfToken=([^;]+)/);
-    if (m) csrf = m[1];
-    cookie = sc;
-  } catch {
-    /* 取不到 token 时仍尝试不带 token 调用 */
+  for (const page of [rankPage, 'https://www.webnovel.com/']) {
+    if (csrf) break;
+    try {
+      const res = await fetch(page, {
+        headers: { 'User-Agent': DESKTOP_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+        redirect: 'follow',
+      });
+      const jar = cookieJar(res);
+      if (jar.length) cookie = jar.join('; ');
+      const hit = jar.find((c) => c.startsWith('_csrfToken='));
+      if (hit) {
+        csrf = hit.slice('_csrfToken='.length);
+        break;
+      }
+      // 兜底：个别版本把 token 内嵌在页面源码里
+      const body = await res.text().catch(() => '');
+      const m = body.match(/_csrfToken["'=:\s]+([A-Za-z0-9-]{16,})/);
+      if (m) csrf = m[1];
+    } catch {
+      /* 换下一个入口再试 */
+    }
   }
 
   const api = new URL('https://www.webnovel.com/go/pcm/category/getRankList');
@@ -410,6 +448,7 @@ export async function webnovel() {
 
   const headers = {
     'User-Agent': DESKTOP_UA,
+    'Accept-Language': 'en-US,en;q=0.9',
     Accept: 'application/json, text/javascript, */*; q=0.01',
     Referer: rankPage,
     'X-Requested-With': 'XMLHttpRequest',
@@ -476,40 +515,18 @@ export async function wuxiaworld() {
   }));
 }
 
-export async function qidian() {
-  // 起点强反爬（腾讯），静态 HTML 解析大概率 0 条，需 API / 移动端；此处先尽力而为。
-  const html = await fetchText('https://www.qidian.com/rank/', { timeout: 20000, ua: MOBILE_UA });
-  const items = collectByAnchor(html, {
-    hrefRe: /\/(?:book|info)\/\d+/i,
-    idRe: /\/(?:book|info)\/(\d+)/i,
-    host: 'https://www.qidian.com',
-  });
-  return items.map((c, i) => ({
-    slug: 'qidian-' + c.id,
-    frontmatter: {
-      title: c.title,
-      author: '',
-      platform: '起点',
-      sourceUrl: c.href,
-      coverUrl: cleanCover(c.cover),
-      language: 'zh',
-      status: 'ongoing',
-      pubDate: new Date(),
-      sourceId: 'qidian:' + c.id,
-      origin: 'html',
-      metrics: { rank: i + 1 },
-      review: makeReview('起点', i + 1, 'zh'),
-    },
-    body: '自动采集自起点排行榜，上线前请核对作者 / 封面。\n',
-  }));
-}
-
 export async function xiaoshuohui() {
-  // 小说会排行榜；链接形态待 CI 验证，先以常见 /book|/novel|/info/<id> 模式尽力解析。
-  const html = await fetchText('https://www.xiaoshuohui.com.cn/top/', { timeout: 20000, ua: MOBILE_UA });
+  // 小说会人气榜 /top/popularity/：条目链接为相对路径 /<id>/ 形式（纯数字），
+  // 标题在 anchor 文本；封面是懒加载 data-src（src 为 lazy_bg 占位图），
+  // imgSrc 已优先取 data-src。此前用 /book|novel|info/<id> 正则 → 恒 0（CI 实测）。
+  const html = await fetchText('https://www.xiaoshuohui.com.cn/top/popularity/', {
+    timeout: 20000,
+    ua: MOBILE_UA,
+  });
   const items = collectByAnchor(html, {
-    hrefRe: /\/(?:book|novel|info)\/\d+/i,
-    idRe: /\/(?:book|novel|info)\/(\d+)/i,
+    // 注意：idRe 是对「补全 host 后的完整 URL」匹配的，不能用 ^...$ 锚定
+    hrefRe: /^\/\d+\/$/i,
+    idRe: /\/(\d+)\/$/i,
     host: 'https://www.xiaoshuohui.com.cn',
   });
   return items.map((c, i) => ({
@@ -528,7 +545,7 @@ export async function xiaoshuohui() {
       metrics: { rank: i + 1 },
       review: makeReview('小说会', i + 1, 'zh'),
     },
-    body: '自动采集自小说会排行榜，上线前请核对作者 / 封面。\n',
+    body: '自动采集自小说会人气榜，上线前请核对作者 / 封面。\n',
   }));
 }
 
@@ -570,7 +587,6 @@ export const ADAPTERS = {
   wattpad,
   webnovel,
   wuxiaworld,
-  qidian,
   xiaoshuohui,
   royalroad,
 };

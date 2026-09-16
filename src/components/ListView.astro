@@ -205,46 +205,13 @@ const methodology =
       }
     </div>
 
-    <!-- 平台静态入口：前端 JS 筛选爬虫看不到，这一行真实 <a> 才是可爬的筛选维度 -->
-    {
-      platforms.length > 1 && (
-        <nav aria-label="Platforms" class="mb-5 flex flex-wrap items-center gap-2 text-xs">
-          <span class="text-slate-400">{t('list.browseByPlatform')}</span>
-          <a
-            href={localizedPath(`/${type}/`, lang)}
-            class:list={[
-              'rounded-full border px-3 py-1 transition',
-              !platform
-                ? 'border-brand-600 bg-brand-600 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700',
-            ]}
-          >
-            {t('filter.all')}
-          </a>
-          {platforms.map((p) => (
-            <a
-              href={listBasePath(lang, type, p)}
-              class:list={[
-                'rounded-full border px-3 py-1 transition',
-                platform === p
-                  ? 'border-brand-600 bg-brand-600 text-white'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700',
-              ]}
-            >
-              {platformName(p, lang)}
-            </a>
-          ))}
-        </nav>
-      )
-    }
-
+    <!--
+      广告位下方是唯一的平台筛选入口（真实 <a> 链接 + 当前平台高亮）。
+      平台页 / 分页页爬虫均可沿链接抓取；不再提供第二组 JS 筛选，避免重复与状态不同步。
+    -->
     <AdSlot label="Advertisement" />
 
-    <!--
-      平台页只展示该平台的条目，JS 平台按钮全部无效，
-      因此传空数组只保留「全部」与排序控件，避免出现点了没反应的死按钮。
-    -->
-    <FilterNav platforms={platform ? [] : platforms} lang={lang} />
+    <FilterNav platforms={platforms} type={type} active={platform} lang={lang} />
 
     {
       entries.length === 0 ? (
