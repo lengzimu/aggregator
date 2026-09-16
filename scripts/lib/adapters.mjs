@@ -5,7 +5,7 @@
 //
 // 重要：解析是基于公开榜单页 HTML / 接口的"尽力而为"实现。各站会改版，
 // 因此每条采集结果都会先落盘到 data/pending/ 待人工复核，绝不直接进 src/content。
-import { fetchText, fetchJSON, DESKTOP_UA, MOBILE_UA } from './fetch.mjs';
+import { fetchText, fetchJSON, MOBILE_UA } from './fetch.mjs';
 
 /* ----------------------------- 通用解析工具 ----------------------------- */
 
@@ -329,8 +329,10 @@ export async function mkzhan() {
 
 export async function wattpad(src) {
   // 优先走公开 API；返回空/报错时回退到榜单页解析。
-  // 实测（CI 开放网络）：api.wattpad.com 可能返回 200 但 body 是错误对象（无 stories 字段，
-  // 如要求 api-key），此时必须视为失败走 HTML 回退，否则 fetched 恒为 0 且无报错。
+  // 实测（CI 开放网络）：api.wattpad.com 会拒绝无鉴权调用（此前 fetched 恒 0 无报错的根因），
+  // 且旧榜单路径 /stories/hot 已 404——Wattpad 改版后榜单为 /stories/<分类>/hot 形式，
+  // 故回退依次尝试多个候选路径，全部失败才报错。
+  const apiErrors = [];
   try {
     const url = `https://api.wattpad.com/api/v3/stories?filter=hot&limit=${
       src.limit || 20
@@ -357,114 +359,70 @@ export async function wattpad(src) {
       },
       body: '',
     }));
-  } catch {
-    // HTML 回退：榜单页 story 链接可能是相对路径 /story/<id>，正则不能要求域名前缀
-    const html = await fetchText('https://www.wattpad.com/stories/hot', { timeout: 20000 });
-    const items = collectByAnchor(html, {
-      hrefRe: /story\/\d+/i,
-      idRe: /story\/(\d+)/i,
-      host: 'https://www.wattpad.com',
-    });
-    return items.map((c, i) => ({
-      slug: 'wattpad-' + c.id,
-      frontmatter: {
-        title: c.title,
-        author: '',
-        platform: 'Wattpad',
-        sourceUrl: c.href,
-        coverUrl: cleanCover(c.cover),
-        language: 'en',
-        tags: [],
-        status: 'ongoing',
-        pubDate: new Date(),
-        sourceId: 'wattpad:' + c.id,
-        origin: 'html',
-        metrics: { rank: i + 1 },
-        review: makeReview('Wattpad', i + 1, 'en'),
-      },
-      body: 'Auto-harvested (HTML fallback) from Wattpad. 上线前请核对。\n',
-    }));
+  } catch (apiErr) {
+    apiErrors.push(String(apiErr?.message || apiErr));
+    // HTML 回退：旧路径 /stories/hot 已 404，Wattpad 改版后榜单为 /stories/<分类>/hot，
+    // 依次尝试候选路径（all 未确认存在，romance 必有）；story 链接可能是相对路径，
+    // 正则不能要求域名前缀。全部失败才向上抛错（错误信息含各路径结果，便于 CI 诊断）。
+    const candidates = [
+      'https://www.wattpad.com/stories/hot',
+      'https://www.wattpad.com/stories/all/hot?locale=en_US',
+      'https://www.wattpad.com/stories/romance/hot?locale=en_US',
+    ];
+    for (const u of candidates) {
+      try {
+        const html = await fetchText(u, { timeout: 20000 });
+        const items = collectByAnchor(html, {
+          hrefRe: /story\/\d+/i,
+          idRe: /story\/(\d+)/i,
+          host: 'https://www.wattpad.com',
+        });
+        if (!items.length) {
+          apiErrors.push(`${u}: 页面可达但无 story 链接`);
+          continue;
+        }
+        return items.map((c, i) => ({
+          slug: 'wattpad-' + c.id,
+          frontmatter: {
+            title: c.title,
+            author: '',
+            platform: 'Wattpad',
+            sourceUrl: c.href,
+            coverUrl: cleanCover(c.cover),
+            language: 'en',
+            tags: [],
+            status: 'ongoing',
+            pubDate: new Date(),
+            sourceId: 'wattpad:' + c.id,
+            origin: 'html',
+            metrics: { rank: i + 1 },
+            review: makeReview('Wattpad', i + 1, 'en'),
+          },
+          body: 'Auto-harvested (HTML fallback) from Wattpad. 上线前请核对。\n',
+        }));
+      } catch (e) {
+        apiErrors.push(`${u}: ${e?.message || e}`);
+      }
+    }
+    throw new Error('wattpad 所有路径均失败: ' + apiErrors.join(' | '));
   }
-}
-
-/** 把响应的 set-cookie 收集成请求可用的 "k=v; k2=v2" 形式（Node fetch 的 get('set-cookie') 不可靠，用 getSetCookie） */
-function cookieJar(res) {
-  const raw =
-    typeof res.headers.getSetCookie === 'function'
-      ? res.headers.getSetCookie()
-      : String(res.headers.get('set-cookie') || '').split(/,(?=[^;]+?=)/);
-  const jar = [];
-  for (const c of raw) {
-    const kv = String(c).split(';')[0].trim();
-    if (kv.includes('=')) jar.push(kv);
-  }
-  return [...new Set(jar)];
 }
 
 export async function webnovel() {
-  // Webnovel 榜单为 SPA，走其 JSON 接口 /go/pcm/category/getRankList。
-  // 接口要求有效 _csrfToken（CI 实测：空 token 恒 403）。token 在任意页面响应的
-  // set-cookie 里，注意必须用 headers.getSetCookie() 读取——Node fetch 的
-  // headers.get('set-cookie') 在部分版本/网关下返回空，这正是此前 CI 403 的根因。
-  const rankPage = 'https://www.webnovel.com/ranking/novel/all_time/popular_rank';
-  let csrf = '';
-  let cookie = '';
-  for (const page of [rankPage, 'https://www.webnovel.com/']) {
-    if (csrf) break;
-    try {
-      const res = await fetch(page, {
-        headers: { 'User-Agent': DESKTOP_UA, 'Accept-Language': 'en-US,en;q=0.9' },
-        redirect: 'follow',
-      });
-      const jar = cookieJar(res);
-      if (jar.length) cookie = jar.join('; ');
-      const hit = jar.find((c) => c.startsWith('_csrfToken='));
-      if (hit) {
-        csrf = hit.slice('_csrfToken='.length);
-        break;
-      }
-      // 兜底：个别版本把 token 内嵌在页面源码里
-      const body = await res.text().catch(() => '');
-      const m = body.match(/_csrfToken["'=:\s]+([A-Za-z0-9-]{16,})/);
-      if (m) csrf = m[1];
-    } catch {
-      /* 换下一个入口再试 */
-    }
-  }
-
-  const api = new URL('https://www.webnovel.com/go/pcm/category/getRankList');
-  const params = {
-    _csrfToken: csrf,
-    pageIndex: '1',
-    rankId: 'popular_rank',
-    listType: '0',
-    type: '1',
-    rankName: 'Popular',
-    timeType: '3',
-    sourceType: '2',
-    sex: '1',
-  };
-  Object.entries(params).forEach(([k, v]) => api.searchParams.set(k, v));
-
-  const headers = {
-    'User-Agent': DESKTOP_UA,
-    'Accept-Language': 'en-US,en;q=0.9',
-    Accept: 'application/json, text/javascript, */*; q=0.01',
-    Referer: rankPage,
-    'X-Requested-With': 'XMLHttpRequest',
-  };
-  if (cookie) headers.Cookie = cookie;
-
-  const json = await fetchJSON(api.toString(), { headers });
-  const items = (json?.data?.bookItems || [])
-    .map((b) => {
-      const id = String(pick(b, ['bookId', 'id', 'bookIdStr']) ?? '');
-      const title = pick(b, ['bookName', 'name', 'title']) || '';
-      const url = pick(b, ['bookUrl', 'url', 'bookLink']) || `https://www.webnovel.com/book/${id}`;
-      const cover = pick(b, ['coverUrl', 'bookCover', 'cover']) || '';
-      return { id, href: url, title, cover };
-    })
-    .filter((c) => c.id);
+  // Webnovel 榜单页 /ranking/novel/all_time/popular_rank 是服务端渲染的完整内容
+  // （外部网络实测可拿到 TOP20 书名 + /book/<slug>_<id> 链接），直接解析 HTML。
+  // 弃用 JSON 接口 /go/pcm/category/getRankList：CI 实测对数据中心 IP 恒 403
+  //（即便经 getSetCookie() 取到 _csrfToken 也一样，属接口级 bot 防护，页面不受影响）。
+  const html = await fetchText('https://www.webnovel.com/ranking/novel/all_time/popular_rank', {
+    timeout: 20000,
+    headers: { 'Accept-Language': 'en-US,en;q=0.9' },
+  });
+  const items = collectByAnchor(html, {
+    hrefRe: /\/book\/[a-z0-9-]+_\d+/i,
+    idRe: /_([0-9]+)(?:\/|$)/i,
+    host: 'https://www.webnovel.com',
+  });
+  if (!items.length) throw new Error('webnovel 榜单页可达但未解析到条目（可能改版）');
   return items.map((c, i) => ({
     slug: 'webnovel-' + c.id,
     frontmatter: {
@@ -477,11 +435,11 @@ export async function webnovel() {
       status: 'ongoing',
       pubDate: new Date(),
       sourceId: 'webnovel:' + c.id,
-      origin: 'api',
+      origin: 'html',
       metrics: { rank: i + 1 },
       review: makeReview('Webnovel', i + 1, 'en'),
     },
-    body: 'Auto-harvested from Webnovel ranking API. 上线前请核对作者 / 封面。\n',
+    body: 'Auto-harvested from Webnovel ranking page. 上线前请核对作者 / 封面。\n',
   }));
 }
 

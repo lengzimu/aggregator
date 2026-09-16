@@ -52,14 +52,14 @@ export const SOURCES = [
     tier: 'api', adapter: 'wattpad', language: 'en', limit: 20,
     hosts: ['wattpad.com'],
     threshold: { minViews: 100_000, minRating: 8.0 },
-    note: 'Wattpad 公开 API（api.wattpad.com/v3），空 stories 视为失败回退 HTML 解析；沙箱出口拦，CI 验证',
+    note: 'Wattpad 公开 API（api.wattpad.com/v3）；失败回退 /stories/<分类>/hot 多候选路径（旧 /stories/hot 已 404）；沙箱不可达，CI 验证',
   },
   {
     key: 'webnovel', platform: 'Webnovel', collection: 'novels',
-    tier: 'api', adapter: 'webnovel', language: 'en', limit: 20,
+    tier: 'html', adapter: 'webnovel', language: 'en', limit: 20,
     hosts: ['webnovel.com'],
     threshold: { maxRank: 30 },
-    note: 'Webnovel 排行榜 JSON 接口 /go/pcm/category/getRankList；_csrfToken 必须经 headers.getSetCookie() 从页面 set-cookie 取',
+    note: 'Webnovel 榜单页 /ranking/novel/all_time/popular_rank 为 SSR，直接解析 HTML；其 JSON 接口对数据中心 IP 恒 403 已弃用',
   },
   {
     key: 'royalroad', platform: 'RoyalRoad', collection: 'novels',
