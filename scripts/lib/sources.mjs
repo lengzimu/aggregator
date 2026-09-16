@@ -4,11 +4,11 @@
 // 3) threshold：实现"点击量高 / 评分高 / 增长快"的收录门槛（满足其一即可）。
 //
 // 档位判定以实测为准（非假设）：
-//   · html 能稳定出数（标题/封面干净）：webtoon / qq(腾讯动漫)
+//   · html 稳定出数（榜单页可解析；封面按需进详情页取）：webtoon / qq(腾讯动漫) / mkzhan(漫客栈) / kuaikan(快看,封面为JS注入留空)
+//   · html 海外小说：royalroad(英文原创,含封面)
 //   · api 直采：wattpad(公开 API) / webnovel(排行榜 JSON 接口，待 CI 验证)
-//   · html 但实质 SPA/SSR 壳（纯 HTML 解析恒为垃圾或 0）：kuaikan(快看, Nuxt 壳占位) /
-//     tapas / wuxiaworld → 与 mankezhan(漫客栈) / fanqie(番茄) 同列 manual，走 import.mjs
-//   · html 待定：qidian(起点) / xiaoshuohui(小说会) 强反爬，CI 若恒 0 则降级 manual
+//   · html 待定：qidian(起点) / xiaoshuohui(小说会) 强反爬，CI 若恒 0 再降级 manual
+//   · manual（纯 HTML 解析恒为 0 或反爬强）：tapas / wuxiaworld(均为 SPA) / fanqie(番茄) → 走 import.mjs
 
 export const SOURCES = [
   {
@@ -30,20 +30,21 @@ export const SOURCES = [
     tier: 'html', adapter: 'qq', language: 'zh', limit: 20,
     hosts: ['ac.qq.com', 'qq.com'],
     threshold: { maxRank: 30 },
-    note: '腾讯动漫排行榜（ac.qq.com/Rank/comicRank），桌面 UA，标题干净',
+    note: '腾讯动漫排行榜（ac.qq.com/Rank/comicRank）；标题干净，封面需进 Comic/comicInfo/id/<id> 详情页取 manhua.acimg.cn',
   },
   {
     key: 'kuaikan', platform: '快看', collection: 'comics',
-    tier: 'manual', adapter: null, language: 'zh',
+    tier: 'html', adapter: 'kuaikan', language: 'zh', limit: 20,
     hosts: ['kuaikanmanhua.com'],
     threshold: { maxRank: 30 },
-    note: '快看榜单为 Nuxt SSR 壳：/topic/ 链接存在但标题/封面由前端 JS 注入，纯 HTML 取到占位("blank"+data:图)；降级 manual',
+    note: '快看排行榜 /ranking/9（Nuxt 渲染）：标题在 anchor 文本、需清洗噪声；封面为 JS 注入的 data: 占位图，留空人工补',
   },
   {
-    key: 'mankezhan', platform: '漫客栈', collection: 'comics',
-    tier: 'manual', adapter: null, language: 'zh',
+    key: 'mkzhan', platform: '漫客栈', collection: 'comics',
+    tier: 'html', adapter: 'mkzhan', language: 'zh', limit: 20,
     hosts: ['mkzhan.com', 'm.mkzhan.com'],
-    note: '漫客栈反爬较强，走 import.mjs 半自动录入',
+    threshold: { maxRank: 30 },
+    note: '漫客栈人气榜 /top/popularity/：链接 /<id>/ 形式，标题在 anchor 文本；封面需进 /<id>/ 详情页取 oss.mkzcdn.com',
   },
   {
     key: 'wattpad', platform: 'Wattpad', collection: 'novels',
@@ -58,6 +59,13 @@ export const SOURCES = [
     hosts: ['webnovel.com'],
     threshold: { maxRank: 30 },
     note: 'Webnovel 排行榜 JSON 接口 /go/pcm/category/getRankList（需 _csrfToken）；待 CI 验证',
+  },
+  {
+    key: 'royalroad', platform: 'RoyalRoad', collection: 'novels',
+    tier: 'html', adapter: 'royalroad', language: 'en', limit: 20,
+    hosts: ['royalroad.com'],
+    threshold: { maxRank: 30 },
+    note: 'RoyalRoad 英文原创小说 best-rated 榜，HTML 含封面+标题，稳定可解析，作海外小说兜底源',
   },
   {
     key: 'wuxiaworld', platform: 'Wuxiaworld', collection: 'novels',

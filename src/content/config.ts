@@ -8,7 +8,7 @@ import { defineCollection, z } from 'astro:content';
  */
 export const VIDEO_PLATFORMS = ['抖音', 'TikTok'] as const;
 export const COMIC_PLATFORMS = ['Webtoon', 'Tapas', '腾讯动漫', '漫客栈', '快看'] as const;
-export const NOVEL_PLATFORMS = ['Webnovel', 'Wattpad', 'Wuxiaworld', '番茄小说'] as const;
+export const NOVEL_PLATFORMS = ['Webnovel', 'Wattpad', 'Wuxiaworld', '番茄小说', 'RoyalRoad', '起点', '小说会'] as const;
 
 /** 内容语种：用于中/英双语站点分流 */
 export const LANGUAGES = ['zh', 'en'] as const;

@@ -27,7 +27,7 @@ function stripTags(s) {
 }
 
 function imgSrc(inner) {
-  const m = inner.match(/<img\b[^>]*src="([^"]+)"/i);
+  const m = inner.match(/<img\b[^>]*?(?:src|data-src)="([^"]+)"/i);
   return m ? m[1] : '';
 }
 
@@ -72,6 +72,20 @@ function cleanWebtoonTitle(t) {
 }
 
 /**
+ * 快看榜单 anchor 文本形如：
+ *   "Created with Sketch. 完美敌人 安妮薇（原著）+郝一个佳思（主笔） 【超A女间谍..."
+ *   "Created with Sketch. 2 我！天命大反派 天命反派（原著）+绘术动漫 ..."
+ * 去掉 "Created with Sketch." 前缀与头部排名数字，截到作者/简介分隔符前取标题首词。
+ * 封面为前端 JS 注入（静态 HTML 仅有 data: 占位图），故封面留空，由人工补全。
+ */
+function cleanKuaikanTitle(t) {
+  let s = String(t).replace(/Created with Sketch\.\s*/i, '').replace(/^\d+\s+/, '');
+  s = s.split(/（|【|\+|×/)[0].trim();
+  s = s.split(/\s+/)[0] || s;
+  return s || String(t).trim();
+}
+
+/**
  * 生成"编辑短评"：只写聚合站自己的增量信号（当前榜单名次），不抄剧情、不模板堆砌。
  * 含真实 title/rank，每条不同；满足 check-reviews 准入（有 metrics 必须有 review）。
  */
@@ -85,6 +99,7 @@ function makeReview(platform, rank, lang) {
 /**
  * 从一批 anchor 中按平台 id 正则去重，提取 {id, href, title, cover}。
  * 标题优先级：anchor 文本 → <img alt> → id，避免图片型条目（如快看）因标题为空被整体跳过。
+ * 遇到同 id 的重复 anchor（如 RoyalRoad 封面图与标题分属两个 <a>）时，合并更优的 title/cover。
  */
 function collectByAnchor(html, { hrefRe, idRe, host = '' }) {
   const anchors = allAnchors(html).filter((a) => hrefRe.test(attr(a.attrs, 'href')));
@@ -94,14 +109,57 @@ function collectByAnchor(html, { hrefRe, idRe, host = '' }) {
     let href = attr(a.attrs, 'href');
     if (!/^https?:/i.test(href)) href = host + href;
     const id = (href.match(idRe) || [])[1];
-    if (!id || seen.has(id)) continue;
+    if (!id) continue;
     const textTitle = stripTags(a.inner).slice(0, 80);
     const altTitle = (a.inner.match(/alt="([^"]*)"/i) || [])[1] || '';
     const title = (textTitle || altTitle || id).trim();
+    const cover = imgSrc(a.inner);
+    if (seen.has(id)) {
+      const prev = items.find((x) => x.id === id);
+      if (prev) {
+        if (!prev.title && title && title !== id) prev.title = title;
+        if (!prev.cover && cover) prev.cover = cover;
+      }
+      continue;
+    }
     seen.add(id);
-    items.push({ id, href, title, cover: imgSrc(a.inner) });
+    items.push({ id, href, title, cover });
   }
   return items;
+}
+
+/** 限并发执行：避免一次 harvest 对单站发起几十个请求把对方打挂 */
+async function mapLimit(arr, limit, fn) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += limit) {
+    const batch = arr.slice(i, i + limit);
+    const r = await Promise.allSettled(batch.map(fn));
+    for (const x of r) out.push(x.status === 'fulfilled' ? x.value : undefined);
+  }
+  return out;
+}
+
+/** 腾讯动漫详情页封面：manhua.acimg.cn 的 vertical 封面（榜单页无封面，必须进详情页取） */
+async function qqCover(id) {
+  try {
+    const html = await fetchText(`https://ac.qq.com/Comic/comicInfo/id/${id}`, { timeout: 15000 });
+    const all = [...html.matchAll(/https?:\/\/manhua\.acimg\.cn\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi)].map((x) => x[0]);
+    const vert = all.find((u) => /\/vertical\//i.test(u)) || all[0];
+    return cleanCover(vert);
+  } catch {
+    return undefined;
+  }
+}
+
+/** 漫客栈详情页封面：oss.mkzcdn.com/comic/cover/...（榜单页封面为懒加载，需进详情页取） */
+async function mkzhanCover(id) {
+  try {
+    const html = await fetchText(`https://www.mkzhan.com/${id}/`, { timeout: 15000 });
+    const m = html.match(/https?:\/\/oss\.mkzcdn\.com\/comic\/cover\/[^\s"'<>]+/i);
+    return cleanCover(m ? m[0] : undefined);
+  } catch {
+    return undefined;
+  }
 }
 
 function base(collection, platform, language, origin) {
@@ -167,20 +225,24 @@ export async function tapas() {
 }
 
 export async function qq() {
+  // 榜单页 ac.qq.com/Rank/comicRank 标题干净，但 anchor 无封面（懒加载）；
+  // 必须进每部详情页 Comic/comicInfo/id/<id> 取 manhua.acimg.cn 的 vertical 封面。
   const html = await fetchText('https://ac.qq.com/Rank/comicRank', { timeout: 20000 });
   const items = collectByAnchor(html, {
     hrefRe: /Comic\/comicInfo\/id\/\d+/i,
     idRe: /id\/(\d+)/i,
     host: 'https://ac.qq.com',
   });
-  return items.map((c, i) => ({
+  const top = items.slice(0, 50);
+  const covers = await mapLimit(top, 5, (c) => qqCover(c.id));
+  return top.map((c, i) => ({
     slug: 'qq-' + c.id,
     frontmatter: {
       title: c.title,
       author: '',
       platform: '腾讯动漫',
       sourceUrl: c.href,
-      coverUrl: cleanCover(c.cover),
+      coverUrl: covers[i],
       language: 'zh',
       status: 'ongoing',
       pubDate: new Date(),
@@ -194,26 +256,25 @@ export async function qq() {
 }
 
 export async function kuaikan() {
-  // 快看榜单为 Nuxt SSR 壳：/topic/ 链接在 SSR 里存在，但标题/封面由前端 JS 注入，
-  // 静态 HTML 取到的是占位（"blank" 标题 + data: 占位图），纯 HTML 解析恒为垃圾数据。
-  // 已降级 manual 档（与 tapas/wuxiaworld 同），走 import.mjs 人工录入。
-  const html = await fetchText('https://www.kuaikanmanhua.com/ranking/', {
+  // 快看排行榜 /ranking/9 为 Nuxt 渲染：anchor 文本含真实标题（"完美敌人" 等），
+  // 但封面是前端 JS 注入的 data: 占位图，静态 HTML 取不到 → 封面留空，人工补全。
+  const html = await fetchText('https://www.kuaikanmanhua.com/ranking/9', {
     timeout: 20000,
     ua: MOBILE_UA,
   });
   const items = collectByAnchor(html, {
-    hrefRe: /\/topic\/\d+/i,
-    idRe: /\/topic\/(\d+)/i,
+    hrefRe: /\/web\/topic\/\d+/i,
+    idRe: /\/web\/topic\/(\d+)/i,
     host: 'https://www.kuaikanmanhua.com',
   });
   return items.map((c, i) => ({
     slug: 'kuaikan-' + c.id,
     frontmatter: {
-      title: c.title,
+      title: cleanKuaikanTitle(c.title),
       author: '',
       platform: '快看',
       sourceUrl: c.href,
-      coverUrl: cleanCover(c.cover),
+      coverUrl: undefined,
       language: 'zh',
       status: 'ongoing',
       pubDate: new Date(),
@@ -222,7 +283,38 @@ export async function kuaikan() {
       metrics: { rank: i + 1 },
       review: makeReview('快看', i + 1, 'zh'),
     },
-    body: '自动采集自快看排行榜，上线前请核对作者 / 封面。\n',
+    body: '自动采集自快看排行榜（/ranking/9），标题来自榜单、封面为 JS 注入需人工补。\n',
+  }));
+}
+
+export async function mkzhan() {
+  // 漫客栈排行榜 /top/popularity/：漫画链接为 /<id>/ 形式，标题在 anchor 文本；
+  // 封面为懒加载，需进详情页 /<id>/ 取 oss.mkzcdn.com/comic/cover/... 。
+  const html = await fetchText('https://www.mkzhan.com/top/popularity/', { timeout: 20000 });
+  const items = collectByAnchor(html, {
+    hrefRe: /^\/\d+\//i,
+    idRe: /\/(\d+)\//i,
+    host: 'https://www.mkzhan.com',
+  });
+  const top = items.slice(0, 50);
+  const covers = await mapLimit(top, 5, (c) => mkzhanCover(c.id));
+  return top.map((c, i) => ({
+    slug: 'mkzhan-' + c.id,
+    frontmatter: {
+      title: c.title,
+      author: '',
+      platform: '漫客栈',
+      sourceUrl: c.href,
+      coverUrl: covers[i],
+      language: 'zh',
+      status: 'ongoing',
+      pubDate: new Date(),
+      sourceId: 'mkzhan:' + c.id,
+      origin: 'html',
+      metrics: { rank: i + 1 },
+      review: makeReview('漫客栈', i + 1, 'zh'),
+    },
+    body: '自动采集自漫客栈人气榜，上线前请核对作者 / 封面。\n',
   }));
 }
 
@@ -440,14 +532,45 @@ export async function xiaoshuohui() {
   }));
 }
 
+export async function royalroad() {
+  // RoyalRoad：英文原创小说站（CC 协议友好），排行榜 HTML 服务端渲染，含封面 + 标题，
+  // 适合作为"海外正版小说"的稳定自动源（Wattpad/Webnovel 在沙箱出口被拦时它能兜底）。
+  const html = await fetchText('https://www.royalroad.com/fictions/best-rated', { timeout: 20000 });
+  const items = collectByAnchor(html, {
+    hrefRe: /\/fiction\/\d+\//i,
+    idRe: /\/fiction\/(\d+)\//i,
+    host: 'https://www.royalroad.com',
+  });
+  return items.map((c, i) => ({
+    slug: 'royalroad-' + c.id,
+    frontmatter: {
+      title: c.title,
+      author: '',
+      platform: 'RoyalRoad',
+      sourceUrl: c.href,
+      coverUrl: cleanCover(c.cover),
+      language: 'en',
+      status: 'ongoing',
+      pubDate: new Date(),
+      sourceId: 'royalroad:' + c.id,
+      origin: 'html',
+      metrics: { rank: i + 1 },
+      review: makeReview('RoyalRoad', i + 1, 'en'),
+    },
+    body: 'Auto-harvested from RoyalRoad best-rated. 上线前请核对。\n',
+  }));
+}
+
 export const ADAPTERS = {
   webtoon,
   tapas,
   qq,
   kuaikan,
+  mkzhan,
   wattpad,
   webnovel,
   wuxiaworld,
   qidian,
   xiaoshuohui,
+  royalroad,
 };
