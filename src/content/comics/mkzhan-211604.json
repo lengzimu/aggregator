@@ -1,16 +1,23 @@
 {
   "title": "皇帝的独生女漫画",
-  "author": "",
+  "author": "D&C MEDIA",
   "platform": "漫客栈",
   "sourceUrl": "https://www.mkzhan.com/211604/",
-  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20210208/6020e8f4da378-750x999.jpg!cover-400",
+  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20210208/6020e8f4da378-750x999.jpg",
   "language": "zh",
-  "status": "ongoing",
+  "status": "completed",
   "pubDate": "2026-09-16T14:04:54.554Z",
   "sourceId": "mkzhan:211604",
   "origin": "html",
   "metrics": {
-    "rank": 17
+    "rank": 9,
+    "rating": 9.6,
+    "views": 81662
   },
-  "review": "当前位列漫客栈热门榜第17名，连载中，更新稳定，可据此按题材挑着追更。"
+  "review": "当前位列漫客栈热门榜第9名，连载中，更新稳定，可据此按题材挑着追更。",
+  "tags": [
+    "搞笑",
+    "生活",
+    "穿越"
+  ]
 }

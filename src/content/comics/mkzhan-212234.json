@@ -1,16 +1,24 @@
 {
   "title": "元尊漫画",
-  "author": "",
+  "author": "未天传媒",
   "platform": "漫客栈",
   "sourceUrl": "https://www.mkzhan.com/212234/",
-  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20230106/63b79116552c5-750x999.jpg!cover-400",
+  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20230106/63b79116552c5-750x999.jpg",
   "language": "zh",
-  "status": "ongoing",
+  "status": "completed",
   "pubDate": "2026-09-16T14:04:54.554Z",
   "sourceId": "mkzhan:212234",
   "origin": "html",
   "metrics": {
-    "rank": 27
+    "rank": 8,
+    "rating": 8.7,
+    "views": 46693
   },
-  "review": "当前位列漫客栈热门榜第27名，连载中，更新稳定，可据此按题材挑着追更。"
+  "review": "当前位列漫客栈热门榜第8名，连载中，更新稳定，可据此按题材挑着追更。",
+  "tags": [
+    "热血",
+    "玄幻",
+    "动作",
+    "励志"
+  ]
 }

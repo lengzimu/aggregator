@@ -1,16 +1,23 @@
 {
   "title": "驭灵师漫画",
-  "author": "",
+  "author": "时代漫王",
   "platform": "漫客栈",
   "sourceUrl": "https://www.mkzhan.com/210640/",
-  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20241019/67130c16bbb38-750x999.jpg!cover-400",
+  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20241019/67130c16bbb38-750x999.jpg",
   "language": "zh",
-  "status": "ongoing",
+  "status": "completed",
   "pubDate": "2026-09-16T14:04:54.554Z",
   "sourceId": "mkzhan:210640",
   "origin": "html",
   "metrics": {
-    "rank": 14
+    "rank": 12,
+    "rating": 9,
+    "views": 104987
   },
-  "review": "当前位列漫客栈热门榜第14名，连载中，更新稳定，可据此按题材挑着追更。"
+  "review": "当前位列漫客栈热门榜第12名，连载中，更新稳定，可据此按题材挑着追更。",
+  "tags": [
+    "搞笑",
+    "热血",
+    "穿越"
+  ]
 }

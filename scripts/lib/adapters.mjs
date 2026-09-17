@@ -5,7 +5,7 @@
 //
 // 重要：解析是基于公开榜单页 HTML / 接口的"尽力而为"实现。各站会改版，
 // 因此每条采集结果都会先落盘到 data/pending/ 待人工复核，绝不直接进 src/content。
-import { fetchText, fetchJSON, MOBILE_UA } from './fetch.mjs';
+import { fetchText, fetchJSON, MOBILE_UA, DESKTOP_UA } from './fetch.mjs';
 
 /* ----------------------------- 通用解析工具 ----------------------------- */
 
@@ -294,35 +294,135 @@ export async function kuaikan() {
   }));
 }
 
+// 漫客栈题材配置（theme_id → 题材名），来自官方详情接口字段说明
+const MKZHAN_THEME = {
+  1: '霸总', 2: '修真', 3: '恋爱', 4: '校园', 5: '冒险', 6: '搞笑', 7: '生活', 8: '热血',
+  9: '架空', 10: '后宫', 12: '玄幻', 13: '悬疑', 14: '恐怖', 15: '灵异', 16: '动作',
+  17: '科幻', 18: '战争', 19: '古风', 20: '穿越', 21: '竞技', 23: '励志', 24: '同人',
+  25: '其他', 26: '真人',
+};
+
+/** theme_id 可能是 "5,8,12" 这样逗号分隔的多题材，映射成中文题材名数组 */
+function mkzhanThemes(themeId) {
+  if (!themeId) return [];
+  return String(themeId)
+    .split(',')
+    .map((id) => MKZHAN_THEME[Number(id)])
+    .filter(Boolean);
+}
+
 export async function mkzhan() {
-  // 漫客栈排行榜 /top/popularity/：漫画链接为 /<id>/ 形式，标题在 anchor 文本；
-  // 封面为懒加载，需进详情页 /<id>/ 取 oss.mkzcdn.com/comic/cover/... 。
-  const html = await fetchText('https://www.mkzhan.com/top/popularity/', { timeout: 20000 });
-  const items = collectByAnchor(html, {
-    hrefRe: /^\/\d+\//i,
-    idRe: /\/(\d+)\//i,
-    host: 'https://www.mkzhan.com',
+  // 漫客栈官方榜单 API（comic.mkzcdn.com）：9 个榜单 = 人气(popular)/上升(ascension)/收藏(collection)
+  // × type 1/2/3。直接返回结构化 JSON，含封面(oss.mkzcdn.com)、题材(theme_id)、评分(score)、阅读数(read_count)。
+  // 同一部漫画会出现在多个榜单，必须按 comic_id 去重（用户明确要求「注意漫画去重」）。
+  const headers = {
+    'User-Agent': DESKTOP_UA,
+    Referer: 'https://www.mkzhan.com/',
+    Accept: 'application/json',
+  };
+  const kinds = ['popular', 'ascension', 'collection'];
+  const types = [1, 2, 3];
+  const urls = [];
+  for (const kind of kinds)
+    for (const type of types)
+      urls.push({ kind, type, url: `https://comic.mkzcdn.com/top/${kind}/type/${type}/page_num/1/page_size/100` });
+
+  // 并发抓取 9 个榜单（限并发 4，避免打爆接口）
+  const lists = await mapLimit(urls, 4, async ({ kind, type, url }) => {
+    try {
+      const json = await fetchJSON(url, { headers, timeout: 20000 });
+      return { kind, list: json?.data?.list || [] };
+    } catch (e) {
+      return { kind, list: [], err: String(e?.message || e) };
+    }
   });
-  const top = items.slice(0, 50);
-  const covers = await mapLimit(top, 5, (c) => mkzhanCover(c.id));
-  return top.map((c, i) => ({
-    slug: 'mkzhan-' + c.id,
-    frontmatter: {
-      title: c.title,
-      author: '',
-      platform: '漫客栈',
-      sourceUrl: c.href,
-      coverUrl: covers[i],
-      language: 'zh',
-      status: 'ongoing',
-      pubDate: new Date(),
-      sourceId: 'mkzhan:' + c.id,
-      origin: 'html',
-      metrics: { rank: i + 1 },
-      review: makeReview('漫客栈', i + 1, 'zh'),
-    },
-    body: '自动采集自漫客栈人气榜，上线前请核对作者 / 封面。\n',
-  }));
+
+  // 按 comic_id 聚合去重：合并题材，保留最佳（最小）名次
+  const byId = new Map();
+  for (const { kind, list } of lists) {
+    if (!list || !list.length) continue;
+    list.forEach((c, idx) => {
+      const id = String(c.comic_id);
+      if (!id) return;
+      const pos = idx + 1; // 列表内名次（popular/collection 无显式 rank 字段，用位置代替）
+      // rank_asc 偶发为 0（异常值），只在其为正时采用，否则回退到列表位置
+      const rank = kind === 'ascension' && Number(c.rank_asc) > 0 ? Number(c.rank_asc) : pos;
+      const prev = byId.get(id);
+      if (!prev) {
+        byId.set(id, {
+          id,
+          title: c.title || '',
+          author: c.author_title || '',
+          cover: c.cover,
+          themeId: c.theme_id,
+          score: c.score != null ? Number(c.score) : undefined,
+          readCount: c.read_count != null ? Number(c.read_count) : undefined,
+          collectionCount: c.collection_count != null ? Number(c.collection_count) : undefined,
+          sourceUrl: `https://www.mkzhan.com/${id}/`,
+          bestRank: rank,
+        });
+      } else {
+        prev.bestRank = Math.min(prev.bestRank, rank);
+        if (!prev.title && c.title) prev.title = c.title;
+        if (!prev.author && c.author_title) prev.author = c.author_title;
+        if (!prev.cover && c.cover) prev.cover = c.cover;
+        if (!prev.themeId && c.theme_id) prev.themeId = c.theme_id;
+      }
+    });
+  }
+
+  // 用详情接口补全「连载/完结」状态：只请求名次靠前的漫画（与 harvest 的 maxRank:30 阈值对齐，
+  // 控制请求量避免被限频；失败则默认 ongoing）。带一次重试提升成功率。
+  const needDetail = [...byId.values()].filter((x) => x.bestRank <= 30);
+  const details = await mapLimit(needDetail, 4, async (x) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const json = await fetchJSON(`https://comic.mkzcdn.com/comic/info?comic_id=${x.id}`, {
+          headers,
+          timeout: 15000,
+        });
+        const d = json?.data || {};
+        if (d.finish != null) return { id: x.id, finish: d.finish };
+      } catch {
+        /* 重试 */
+      }
+    }
+    return { id: x.id };
+  });
+  const detailMap = new Map(details.map((d) => [d.id, d]));
+
+  return [...byId.values()].map((x) => {
+    const tags = mkzhanThemes(x.themeId);
+    const rawCover = cleanCover(x.cover);
+    const coverUrl = rawCover ? rawCover.replace(/^http:/i, 'https:') : undefined; // 升级 https 避免混合内容
+    const det = detailMap.get(x.id) || {};
+    // 注意：detail 接口 finish 是字符串（"1"=连载, "2"=完结），需转数字比较
+    const status = Number(det.finish) === 2 ? 'completed' : 'ongoing';
+    const rating = x.score != null ? Math.round((x.score / 10) * 10) / 10 : undefined; // score 为 /100，折算 10 分制
+    const metrics = { rank: x.bestRank };
+    if (rating != null) metrics.rating = rating;
+    if (x.readCount != null) metrics.views = x.readCount;
+    if (x.collectionCount != null) metrics.subscribers = x.collectionCount;
+    return {
+      slug: 'mkzhan-' + x.id,
+      frontmatter: {
+        title: x.title || '漫客栈作品' + x.id,
+        author: x.author,
+        platform: '漫客栈',
+        sourceUrl: x.sourceUrl,
+        coverUrl,
+        language: 'zh',
+        tags,
+        status,
+        pubDate: new Date(),
+        sourceId: 'mkzhan:' + x.id,
+        origin: 'api',
+        metrics,
+        review: makeReview('漫客栈', x.bestRank, 'zh'),
+      },
+      body: '自动采集自漫客栈官方榜单 API（人气/上升/收藏），覆盖题材：' + (tags.join('、') || '未标注') + '。\n',
+    };
+  });
 }
 
 /* ------------------------------- 小说适配器 ------------------------------ */

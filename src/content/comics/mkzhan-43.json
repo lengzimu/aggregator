@@ -1,16 +1,23 @@
 {
   "title": "偷星九月天漫画",
-  "author": "",
+  "author": "潜艇工作室",
   "platform": "漫客栈",
   "sourceUrl": "https://www.mkzhan.com/43/",
-  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20181206/5c0888b6959f2-600x800.jpg!cover-400",
+  "coverUrl": "https://oss.mkzcdn.com/comic/cover/20181206/5c0888b6959f2-600x800.jpg",
   "language": "zh",
-  "status": "ongoing",
+  "status": "completed",
   "pubDate": "2026-09-16T14:04:54.554Z",
   "sourceId": "mkzhan:43",
   "origin": "html",
   "metrics": {
-    "rank": 2
+    "rank": 1,
+    "rating": 9.3,
+    "views": 430220
   },
-  "review": "当前位列漫客栈热门榜第2名，连载中，更新稳定，可据此按题材挑着追更。"
+  "review": "当前位列漫客栈热门榜第1名，连载中，更新稳定，可据此按题材挑着追更。",
+  "tags": [
+    "冒险",
+    "热血",
+    "玄幻"
+  ]
 }

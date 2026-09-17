@@ -43,10 +43,10 @@ export const SOURCES = [
   },
   {
     key: 'mkzhan', platform: '漫客栈', collection: 'comics',
-    tier: 'html', adapter: 'mkzhan', language: 'zh', limit: 20,
-    hosts: ['mkzhan.com', 'm.mkzhan.com'],
+    tier: 'api', adapter: 'mkzhan', language: 'zh', limit: 20,
+    hosts: ['mkzhan.com', 'm.mkzhan.com', 'comic.mkzcdn.com'],
     threshold: { maxRank: 30 },
-    note: '漫客栈人气榜 /top/popularity/：链接 /<id>/ 形式，标题在 anchor 文本；封面需进 /<id>/ 详情页取 oss.mkzcdn.com',
+    note: '漫客栈官方榜单 API comic.mkzcdn.com/top/{popular|ascension|collection}/type/{1,2,3}：9 榜按 comic_id 去重；封面/题材/评分/阅读数均在 JSON 内，详情接口 comic/info 补 finish(连载/完结)',
   },
   {
     key: 'wattpad', platform: 'Wattpad', collection: 'novels',
