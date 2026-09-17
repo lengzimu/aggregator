@@ -97,14 +97,6 @@ const entryLang = data.language ?? 'zh';
           </span>
         )
       }
-
-      {
-        metrics.rank != null && (
-          <span class="absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-semibold text-white backdrop-blur">
-            #{metrics.rank}
-          </span>
-        )
-      }
     </div>
 
     <div class="flex flex-1 flex-col gap-1 p-3">
@@ -112,9 +104,32 @@ const entryLang = data.language ?? 'zh';
       <p class="text-xs text-slate-500">{creator}</p>
 
       {
-        /* 编辑短评：列表页可索引，每条贡献原创文本，是抗「薄内容」的主力 */
-        data.review && (
-          <p class="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{data.review}</p>
+        /* 题材标签 */
+        data.tags.length > 0 && (
+          <div class="flex flex-wrap gap-1">
+            {data.tags.slice(0, 3).map((tag) => (
+              <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">{tag}</span>
+            ))}
+          </div>
+        )
+      }
+
+      {
+        /* 内容简介（漫客栈等接口带回）；无简介的平台回退展示编辑短评 */
+        (data.description ?? data.review) && (
+          <p class="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">
+            {'description' in data ? data.description : data.review}
+          </p>
+        )
+      }
+
+      {
+        /* 最新章节 + 开始时间（接口采集的漫画条目才有） */
+        'latestChapter' in data && data.latestChapter && (
+          <p class="mt-0.5 line-clamp-1 text-[11px] text-slate-400">
+            <span class="font-medium text-slate-500">{data.latestChapter}</span>
+            {'latestChapterAt' in data && data.latestChapterAt && <> · {fmtDate(data.latestChapterAt)}</>}
+          </p>
         )
       }
 
@@ -140,15 +155,6 @@ const entryLang = data.language ?? 'zh';
         )
       }
 
-      {
-        data.tags.length > 0 && (
-          <div class="mt-1 flex flex-wrap gap-1">
-            {data.tags.slice(0, 3).map((tag) => (
-              <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">{tag}</span>
-            ))}
-          </div>
-        )
-      }
     </div>
   </a>
 </article>

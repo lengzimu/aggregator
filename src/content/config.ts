@@ -89,6 +89,12 @@ const comics = defineCollection({
     author: z.string(),
     platform: z.enum(COMIC_PLATFORMS),
     status: z.enum(STATUSES).default('ongoing'),
+    /** 内容简介（漫客栈详情接口 content，截断 200 字），渲染在列表页卡片 */
+    description: z.string().optional(),
+    /** 最新章节名（漫客栈详情接口 chapter_title） */
+    latestChapter: z.string().optional(),
+    /** 最新章节开始时间（JSON 中存 ISO 字符串，coerce 转 Date） */
+    latestChapterAt: z.coerce.date().optional(),
   }),
 });
 

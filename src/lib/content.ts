@@ -152,6 +152,6 @@ export function metricLine(entry: AnyEntry, lang: Lang): string {
         ? `${formatCount(mm.subscribers, lang)} subs`
         : `${formatCount(mm.subscribers, lang)} 订阅`
     );
-  if (mm.rank != null) parts.push(lang === 'en' ? `Chart #${mm.rank}` : `榜单 #${mm.rank}`);
+  // rank 只用于排序，不对外展示（用户要求不显示排行）
   return parts.join(lang === 'en' ? ' · ' : ' · ');
 }

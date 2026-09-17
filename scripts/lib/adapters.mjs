@@ -302,6 +302,12 @@ const MKZHAN_THEME = {
   25: '其他', 26: '真人',
 };
 
+/** 去掉标题末尾的「漫画」后缀（旧 HTML 榜单锚文本会整串带「XX漫画」，接口标题本身干净） */
+function cleanMkzhanTitle(t) {
+  const s = String(t || '').replace(/漫画+$/g, '').trim();
+  return s || String(t || '');
+}
+
 /** theme_id 可能是 "5,8,12" 这样逗号分隔的多题材，映射成中文题材名数组 */
 function mkzhanThemes(themeId) {
   if (!themeId) return [];
@@ -351,7 +357,7 @@ export async function mkzhan() {
       if (!prev) {
         byId.set(id, {
           id,
-          title: c.title || '',
+          title: cleanMkzhanTitle(c.title),
           author: c.author_title || '',
           cover: c.cover,
           themeId: c.theme_id,
@@ -363,7 +369,7 @@ export async function mkzhan() {
         });
       } else {
         prev.bestRank = Math.min(prev.bestRank, rank);
-        if (!prev.title && c.title) prev.title = c.title;
+        if (!prev.title && c.title) prev.title = cleanMkzhanTitle(c.title);
         if (!prev.author && c.author_title) prev.author = c.author_title;
         if (!prev.cover && c.cover) prev.cover = c.cover;
         if (!prev.themeId && c.theme_id) prev.themeId = c.theme_id;
@@ -371,10 +377,11 @@ export async function mkzhan() {
     });
   }
 
-  // 用详情接口补全「连载/完结」状态：只请求名次靠前的漫画（与 harvest 的 maxRank:30 阈值对齐，
-  // 控制请求量避免被限频；失败则默认 ongoing）。带一次重试提升成功率。
-  const needDetail = [...byId.values()].filter((x) => x.bestRank <= 30);
-  const details = await mapLimit(needDetail, 4, async (x) => {
+  // 用详情接口补全：连载/完结(finish) + 内容简介(content) + 最新章节名(chapter_title) +
+  // 章节开始时间(chapter_start_time，秒级时间戳)。后三者是卡片展示字段，
+  // 因此对全部去重后的条目请求详情（并发 4 + 一次重试，控量避免限频；失败字段留空不影响入库）。
+  // 注意：detail 接口 UA 挑剔，需完整桌面 UA 且先打过 top 榜单请求（上文已满足），否则 403。
+  const details = await mapLimit([...byId.values()], 4, async (x) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const json = await fetchJSON(`https://comic.mkzcdn.com/comic/info?comic_id=${x.id}`, {
@@ -382,7 +389,16 @@ export async function mkzhan() {
           timeout: 15000,
         });
         const d = json?.data || {};
-        if (d.finish != null) return { id: x.id, finish: d.finish };
+        if (d.finish != null || d.chapter_title || d.content)
+          return {
+            id: x.id,
+            finish: d.finish,
+            content: d.content ? String(d.content).trim().slice(0, 200) : undefined,
+            chapterTitle: d.chapter_title ? String(d.chapter_title).trim() : undefined,
+            chapterStart: d.chapter_start_time
+              ? new Date(Number(d.chapter_start_time) * 1000).toISOString()
+              : undefined,
+          };
       } catch {
         /* 重试 */
       }
@@ -403,23 +419,28 @@ export async function mkzhan() {
     if (rating != null) metrics.rating = rating;
     if (x.readCount != null) metrics.views = x.readCount;
     if (x.collectionCount != null) metrics.subscribers = x.collectionCount;
+    const frontmatter = {
+      title: x.title || '漫客栈作品' + x.id,
+      author: x.author,
+      platform: '漫客栈',
+      sourceUrl: x.sourceUrl,
+      coverUrl,
+      language: 'zh',
+      tags,
+      status,
+      pubDate: new Date(),
+      sourceId: 'mkzhan:' + x.id,
+      origin: 'api',
+      metrics,
+      review: makeReview('漫客栈', x.bestRank, 'zh'),
+    };
+    // 卡片展示字段：内容简介 / 最新章节名 / 最新章节开始时间（详情接口失败时留空）
+    if (det.content) frontmatter.description = det.content;
+    if (det.chapterTitle) frontmatter.latestChapter = det.chapterTitle;
+    if (det.chapterStart) frontmatter.latestChapterAt = det.chapterStart;
     return {
       slug: 'mkzhan-' + x.id,
-      frontmatter: {
-        title: x.title || '漫客栈作品' + x.id,
-        author: x.author,
-        platform: '漫客栈',
-        sourceUrl: x.sourceUrl,
-        coverUrl,
-        language: 'zh',
-        tags,
-        status,
-        pubDate: new Date(),
-        sourceId: 'mkzhan:' + x.id,
-        origin: 'api',
-        metrics,
-        review: makeReview('漫客栈', x.bestRank, 'zh'),
-      },
+      frontmatter,
       body: '自动采集自漫客栈官方榜单 API（人气/上升/收藏），覆盖题材：' + (tags.join('、') || '未标注') + '。\n',
     };
   });
