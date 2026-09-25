@@ -191,3 +191,4 @@ STORE_COVERS=1 node scripts/import.mjs
 - **漫画 / 小说封面不走 R2**，仍用原站外链（link index 不变）；只有短视频封面走 R2。
 - **`COVER_UPLOAD_TOKEN` 泄漏风险面小**：持口令只能 `PUT` 封面到固定前缀，不能列桶、不能删、拿不到密钥。建议定期 `openssl rand -hex 32` 轮换。
 - **本地 `store-cover` 无凭据时** `isR2Configured()` 为 false，脚本会打印提示并不上传——这是预期降级，不是报错。
+- **中国大陆发卡行在 Cloudflare / Stripe 绑卡常被硬拒（实测：中信万事达 i 白金）**：动卡空间里**没有**银联专属的「境外无卡支付」开关（那是银联单币卡才有）；Mastercard 双币卡看「境外支付 3D 安全」。先确认卡已**激活**、再开 3D 安全（关掉反而增加盗刷风险，且实测关/开均报「银行卡被拒绝」）。若开启后仍拒，通常是**发卡行或 Stripe 对该卡组织 / 地区风控**，非配置问题——**此时不必纠结 R2**：代码已自动降级（见 `THIRD_PARTY_PUSH.md` 第 4 节），封面落仓库 `public/covers/videos/`、记站内相对路径 `/covers/videos/<slug>.jpg`，**零信用卡即可用**。R2 留作将来规模化（换 Visa 双币卡 / 境外卡 / 虚拟卡）时再配，代码无需改动。
