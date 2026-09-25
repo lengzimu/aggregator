@@ -19,11 +19,13 @@ HubLinks 是一个面向海外用户的**内容发现与导流站**，聚合三�
 
 > ⚠️ **唯一的存储例外：短视频封面（cover）**
 > 短视频平台（抖音 / TikTok）的封面图普遍带**防盗链（Referer 校验）**，且原始链接有效期短、经常失效。如果像漫画/小说那样只存外链，卡片几乎必然裂图。
-> 因此本站**对短视频封面做对象存储（Cloudflare R2）**：第三方把封面传到 R2，仓库里只记录该封面的**R2 公开 URL**（`coverUrl`），二进制存于 R2、不进 git 历史。
+> 因此本站**对短视频封面做存储**，存储后端**自动降级**：
+> - **配了 Cloudflare R2**（环境变量 `R2_*` 齐全）→ 封面上 R2 对象存储，仓库只记录 R2 公开 URL；
+> - **未配 R2**（无信用卡 / 未开通）→ 封面自动落仓库 `public/covers/videos/`，`coverUrl` 记站内相对路径 `/covers/videos/<slug>.jpg`，二进制随站点部署。
 >
-> 一句话定位修正：**「本站是链接索引服务 + 短视频封面对象存储（R2）」**——除短视频封面外，不存储任何媒体文件（视频 / 图片 / 正文），仅通过外链引用与 302 跳转导流到原站。
+> 一句话定位修正：**「本站是链接索引服务 + 短视频封面存储（R2 优先，仓库内降级）」**——除短视频封面外，不存储任何媒体文件（视频 / 图片 / 正文），仅通过外链引用与 302 跳转导流到原站。
 >
-> 为什么是 R2 而不是仓库内 `public/covers`：Cloudflare Pages 单次部署上限 **20,000 文件**、封面进 git 历史会膨胀仓库（GitHub 推荐 < 1 GB）；R2 免费 **10 GB 存储 + 1M A 类 + 10M B 类操作/月、出网费为零**、S3 兼容，脚本 / CI / 直传端点都能 PUT。详见第 4 节与第 4.5 节。
+> 为什么推荐 R2 而不是只用仓库内 `public/covers`：Cloudflare Pages 单次部署上限 **20,000 文件**、封面进 git 历史会膨胀仓库（GitHub 推荐 < 1 GB）；R2 免费 **10 GB 存储 + 1M A 类 + 10M B 类操作/月、出网费为零**、S3 兼容。但规模小（几百张以内）时仓库内完全够用、零配置零信用卡。详见第 4 节。
 
 ---
 
@@ -53,7 +55,7 @@ HubLinks 是一个面向海外用户的**内容发现与导流站**，聚合三�
 | `creator` | ✓ | string | UP 主 / 作者名（短视频用 `creator`，不用 `author`） |
 | `platform` | ✓ | enum | 必须是白名单值：`抖音` 或 `TikTok` |
 | `sourceUrl` | ✓ | url | **跳转目标**，原站长链优先（如 `https://www.douyin.com/video/xxxx`） |
-| `coverUrl` | ✓（短视频） | url | **短视频封面的 R2 公开 URL**（见第 4 节），如 `https://<bucket>.r2.dev/videos/<slug>.jpg` |
+| `coverUrl` | ✓（短视频） | url/路径 | 封面地址：R2 公开 URL / 仓库内相对路径 `/covers/videos/<slug>.jpg` / 第三方图床 URL（三者其一，见第 4 节） |
 | `language` | ✗ | `zh` \| `en` | 默认 `zh` |
 | `tags` | ✗ | string[] | 短视频**允许为空数组** `[]` |
 | `review` | 建议 | string(40–200) | 列表页原创短评，写增量信息（适合谁/看点/避雷），**绝不写剧情简介** |
@@ -104,19 +106,19 @@ HubLinks 是一个面向海外用户的**内容发现与导流站**，聚合三�
 
 ## 4. 短视频封面存储规范（必读）
 
-封面是短视频条目**必填**项，且**必须存于 R2 对象存储**，不能只给抖音/TikTok 外链（防盗链会拦截）。
+封面是短视频条目**必填**项，且**必须存储**（不能只给抖音/TikTok 外链，防盗链会拦截）。存储后端**自动降级**：
 
-### 4.1 存储后端：Cloudflare R2
+- 配了 R2（环境变量 `R2_*` 齐全）→ 走 R2 对象存储，`coverUrl` 写 R2 公开 URL；
+- 没配 R2 → 自动落仓库 `public/covers/videos/`，`coverUrl` 写站内相对路径 `/covers/videos/<slug>.jpg`。
 
-- 桶名（示例）：`hublinks-covers`
-- 对象键：`videos/<slug>.<ext>`（`<slug>` 与第 3 节 JSON 文件名一致）
-- 公开地址：`https://<bucket>.r2.dev/videos/<slug>.<ext>`，或绑定自定义域后 `https://covers.hublinks.example/videos/<slug>.<ext>`
+两种情况下 `coverUrl` 都是有效可加载地址；统一入口 `scripts/lib/r2.mjs` 的 `storeCover()` 负责选择。
+
+### 4.1 方式 A — Cloudflare R2（推荐，规模化首选）
+
+- 桶名（示例）：`hublinks-covers`；对象键：`videos/<slug>.<ext>`（`<slug>` 与第 3 节 JSON 文件名一致）
+- 公开地址：`https://<bucket>.r2.dev/videos/<slug>.<ext>`，或自定义域后 `https://covers.hublinks.example/videos/<slug>.<ext>`
 - 免费额度：10 GB 存储 + 1M A 类 + 10M B 类操作/月，**出网费为零**
-
-### 4.2 第三方怎么把封面传上 R2（三种方式）
-
-**方式 A — 直传端点（推荐，第三方无需 R2 密钥）**
-本站提供 `POST /api/cover`，持上传口令即可直传：
+- 第三方直传端点 `POST /api/cover`（持 `COVER_UPLOAD_TOKEN` 口令，无需 R2 密钥）：
 
 ```bash
 curl -X POST https://<你的域名>/api/cover \
@@ -125,46 +127,49 @@ curl -X POST https://<你的域名>/api/cover \
   -d '{"url":"https://.../cover.jpg","slug":"coffee-art"}'
 # 返回 {"ok":true,"url":"https://<bucket>.r2.dev/videos/coffee-art.jpg","key":"videos/coffee-art.jpg"}
 ```
-
 把返回的 `url` 填进 JSON 的 `coverUrl` 即可。不传 `slug` 时由源 URL 自动生成。
 
-**方式 B — 自建脚本地上传（信任的自动化 / CI）**
-仓库自带 `scripts/store-cover.mjs`，配置 R2 凭据后：
+- 本地 / CI 上传（需 R2 凭据）：`node scripts/store-cover.mjs https://.../cover.jpg coffee-art --apply`
+
+### 4.2 方式 B — 仓库内存储（零信用卡、零配置，规模小首选）
+
+未配置 R2 时，`storeCover()` 自动把封面写到 `public/covers/videos/<slug>.<ext>`，`coverUrl` 写站内相对路径：
 
 ```bash
-export R2_ACCOUNT_ID=... R2_BUCKET=hublinks-covers R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_PUBLIC_URL=https://<bucket>.r2.dev
 node scripts/store-cover.mjs https://.../cover.jpg coffee-art --apply
-# 打印 https://<bucket>.r2.dev/videos/coffee-art.jpg
+# 未配 R2 时打印 /covers/videos/coffee-art.jpg
 ```
+或直接把封面文件放进 `public/covers/videos/`，在 JSON 里填 `"/covers/videos/coffee-art.jpg"`。二进制随站点部署（Cloudflare Pages 带宽无限）。
+> 注意：每涨一张封面都占 Pages 部署的 **20,000 文件**名额，且进 git 历史；规模上千张后再迁 R2（见 4.6）。
 
-**方式 C — 自有图床（最简，仓库纯 link index）**
-第三方自己托管封面（任意稳定图床 / CDN），直接把该 URL 填进 `coverUrl`。本站不托管该二进制，仓库只记录链接——最贴合「GitHub 只记录链接地址」的初衷。
+### 4.3 方式 C — 自有图床（最简，纯 link index）
 
-### 4.3 JSON 里只记 R2 公开 URL
+第三方自己托管封面（任意稳定图床 / CDN），直接把 URL 填进 `coverUrl`。仓库只记录链接，最贴合「GitHub 只记录链接地址」初衷。
+
+### 4.4 JSON 里记什么（按所选方式）
 
 ```json
-"coverUrl": "https://<bucket>.r2.dev/videos/coffee-art.jpg"
+"coverUrl": "https://<bucket>.r2.dev/videos/coffee-art.jpg"   // 方式 A（R2）
+"coverUrl": "/covers/videos/coffee-art.jpg"                    // 方式 B（仓库内相对路径）
+"coverUrl": "https://第三方图床/coffee-art.jpg"                // 方式 C
 ```
+> schema 同时接受「绝对 URL」与「根相对路径 `/...`」，三种写法都合法。
 
-> 仓库里**只存链接地址**，封面二进制在 R2。这就是「github 上只记录链接地址」的含义（封面不进 git 历史）。
+### 4.5 封面要求
 
-### 4.4 封面要求
-
-- 格式：JPG / PNG / WebP；建议竖图 `400×600` 左右（卡片比例 `2:3`）。
+- 格式：JPG / PNG / WebP；建议竖图 `400×600`（卡片比例 `2:3`）。
 - 体积：尽量 < 200 KB（`/api/cover` 上限 5 MB）。
-- **务必先传封面、拿到 URL 再提交 JSON**：`coverUrl` 是伪造/失效地址，每日失效巡检会清空该字段、回退默认封面。
-- 不要提交二进制到 `src/content/` 或 `public/` —— 封面统一在 R2。
+- **务必先传封面、拿到地址再提交 JSON**：`coverUrl` 失效，每日巡检会清空该字段、回退默认封面。
+- 方式 B 时封面二进制放 `public/covers/videos/`（与 JSON 一起提交）；方式 A/C 不往仓库放二进制。
 
-### 4.5 运维侧：R2 桶与凭据配置（一次性）
+### 4.6 运维侧：R2 桶与凭据配置（仅选方式 A 时需要，一次性）
 
 1. Cloudflare 控制台 → R2 → 创建桶（如 `hublinks-covers`），开启 **Public bucket**（得 `https://<bucket>.r2.dev` 或绑自定义域）。
-2. R2 → 管理 API 令牌 → 创建令牌（对桶有 Object Read/Write），记下 Access Key ID / Secret。
-3. Pages 项目 → Settings → Bindings → 添加 R2 桶绑定，变量名 **`COVER`**，绑定该桶（供 `/api/cover` 直传）。
-4. Pages → Settings → Environment variables 添加：
-   - `R2_PUBLIC_URL` = `https://<bucket>.r2.dev`
-   - `COVER_UPLOAD_TOKEN` = `<长随机串>`（第三方直传口令）
-5. 本地脚本 / CI 用 S3 凭据（非绑定）：在 shell 或仓库 Secrets 配置 `R2_ACCOUNT_ID` / `R2_BUCKET` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`（CI 还要 `R2_PUBLIC_URL`）。
-6. 可选：每日失效巡检 `check-links.js` 会按 `http(s)` 检查 R2 封面，失效自动清空。
+2. R2 → 管理 API 令牌 → 创建令牌（Object Read/Write），记下 Access Key / Secret。
+3. Pages 项目 → Settings → Bindings → 添加 R2 桶绑定，变量名 **`COVER`**，绑该桶（供 `/api/cover`）。
+4. Pages → Settings → Environment variables：`R2_PUBLIC_URL` = `https://<bucket>.r2.dev`、`COVER_UPLOAD_TOKEN` = `<长随机串>`。
+5. 本地 / CI 用 S3 凭据（非绑定）：shell 或仓库 Secrets 配 `R2_ACCOUNT_ID` / `R2_BUCKET` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`（CI 再 + `R2_PUBLIC_URL`）。
+6. 可选：每日巡检 `check-links.js` 按 `http(s)` 检查 R2/图床封面；方式 B 的站内相对路径会自动跳过、不会被误清空。
 
 ---
 
@@ -197,7 +202,7 @@ node scripts/store-cover.mjs https://.../cover.jpg coffee-art --apply
 - [ ] 文件落在 `src/content/videos/<slug>.json`（或先放 `data/pending/videos/`）
 - [ ] `title` / `creator` / `platform` / `sourceUrl` / `coverUrl` / `pubDate` / `origin` 齐全
 - [ ] `platform` ∈ {`抖音`, `TikTok`}，`sourceUrl` 为官方长链
-- [ ] 封面已传到 R2（方式 A/B/C 任选），`coverUrl` 为 R2 公开 URL 或第三方自有图床地址
+- [ ] 封面已存（方式 A/B/C 任选），`coverUrl` 为对应地址（R2 公开 URL / `/covers/videos/...` 相对路径 / 第三方图床）
 - [ ] 有 `metrics` 就必须有 `review`（否则过不了 CI 质量门）
 - [ ] `slug` 唯一（跑 `npm run dedupe` 确认无重复）
 - [ ] 提交后 Cloudflare Pages 自动部署，卡片应正常显示封面并可跳转
@@ -220,7 +225,7 @@ node scripts/store-cover.mjs https://.../cover.jpg coffee-art --apply
 |---|---|
 | `src/content/config.ts` | zod schema + 平台白名单（唯一事实来源） |
 | `src/content/videos/*.json` | 短视频数据条目 |
-| `public/covers/videos/*` | 短视频封面二进制（本地存储） |
+| `public/covers/videos/*` | 短视频封面二进制（R2 未配置时的本地降级存储） |
 | `scripts/generate-redirects.mjs` | 生成 302 跳转规则 |
 | `scripts/dedupe.mjs` | 重复检测（接入前自检） |
 | `scripts/check-reviews.mjs` | review 合规校验（CI 质量门） |

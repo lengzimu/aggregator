@@ -13,7 +13,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getSource, isWhitelistedHost } from './lib/sources.mjs';
 import { toJson, writePending } from './lib/markdown.mjs';
-import { isR2Configured, storeCoverFromUrl } from './lib/r2.mjs';
+import { storeCover } from './lib/r2.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -67,19 +67,22 @@ async function main() {
       metrics: item.metrics || undefined,
     };
     // 短视频封面特殊性：抖音/TikTok 外链带防盗链且易失效，必须存储。
-    // STORE_COVERS=1 且有 R2 凭据时，把 coverUrl 外链抓到 R2、替换为 R2 公开 URL；
+    // STORE_COVERS=1 时：配了 R2 走 R2（coverUrl 写 R2 公开 URL），否则落仓库
+    // public/covers/videos（coverUrl 写站内相对路径 /covers/videos/<slug>.ext）。
     // 失败则保留原外链（不阻断导入），并提示人工补封面。
     if (
       src.collection === 'videos' &&
       item.coverUrl &&
       /^https?:/i.test(item.coverUrl) &&
-      process.env.STORE_COVERS === '1' &&
-      isR2Configured()
+      process.env.STORE_COVERS === '1'
     ) {
       try {
-        fm.coverUrl = await storeCoverFromUrl(item.coverUrl, slug);
+        fm.coverUrl = await storeCover(item.coverUrl, slug, {
+          prefix: 'videos',
+          localDir: join(ROOT, 'public', 'covers'),
+        });
       } catch (e) {
-        console.warn(`  ⚠️ 封面上传 R2 失败，保留原外链：${e.message}`);
+        console.warn(`  ⚠️ 封面上传失败，保留原外链：${e.message}`);
       }
     }
 

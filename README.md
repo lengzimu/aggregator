@@ -2,8 +2,8 @@
 
 一个面向海外用户的**内容发现与导流**网站，聚合三类内容：短视频（抖音 / TikTok）、漫画、小说。
 
-> ⚠️ **核心定位：链接索引服务 + 短视频封面对象存储（R2）**
-> 本站**除短视频封面外不存储任何媒体文件**（视频 / 图片 / 正文），仅通过外链引用与 302 跳转把用户导流到原站。短视频封面因平台防盗链与链接时效问题，存于 **Cloudflare R2 对象存储**——仓库只记录封面的 R2 公开 URL（二进制不进 git 历史），详见 [`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md)。
+> ⚠️ **核心定位：链接索引服务 + 短视频封面存储（R2 优先，仓库内降级）**
+> 本站**除短视频封面外不存储任何媒体文件**（视频 / 图片 / 正文），仅通过外链引用与 302 跳转把用户导流到原站。短视频封面因平台防盗链与链接时效问题必须存储：配了 Cloudflare R2 走 R2（仓库只记 R2 公开 URL），未配 R2 自动落仓库 `public/covers/videos/`（记站点内相对路径），二进制都不进 `src/content`——详见 [`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md) 第 4 节。
 
 ---
 
@@ -160,7 +160,7 @@ node scripts/add-entry.mjs --type videos --title "拉花教学" --platform 抖�
 ```
 
 - `sourceUrl`：**必填**，跳转目标（原站长链优先）。
-- `coverUrl`：漫画/小说填**原站外链**（失效自动回退 `default-cover.svg`）；**短视频封面必须存于 R2**——填 R2 公开 URL（如 `https://<bucket>.r2.dev/videos/<slug>.jpg`）。缺省时**整字段省略**，不要写空串。封面如何上传见 [`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md) 第 4 节。
+- `coverUrl`：漫画/小说填**原站外链**（失效自动回退 `default-cover.svg`）；**短视频封面必须存储**——配 R2 填 R2 公开 URL（如 `https://<bucket>.r2.dev/videos/<slug>.jpg`），未配 R2 填仓库内相对路径 `/covers/videos/<slug>.jpg`（封面文件放 `public/covers/videos/`）。缺省时**整字段省略**，不要写空串。封面如何上传见 [`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md) 第 4 节。
 - `metrics`：可选，热度指标（rating / views / growth / rank / subscribers / capturedAt）。有指标就必须写 `review`，否则进不了「编辑精选」。
 - `review`：**强烈建议填写**（40–200 字）。这是列表页上唯一的原创文本，直接对抗薄内容判定。
   规范见 `config.ts` 注释 —— 只写源站没有的增量信息（适合谁 / 看点 / 避雷 / 更新是否稳定），
@@ -357,14 +357,14 @@ DMCA 表单已集成 Turnstile 人机验证，**配置即生效，未配置则�
 
 ### 必须做
 - 所有外链 `target="_blank" rel="noopener noreferrer"`
-- 短视频封面存于 Cloudflare R2（公开 URL 填 `coverUrl`，二进制不进 git 历史）；漫画/小说封面引用原站外链，`referrerpolicy="no-referrer"`
+- 短视频封面存储（R2 优先，未配 R2 则落仓库 `public/covers/videos/` 站内相对路径）；漫画/小说封面引用原站外链，`referrerpolicy="no-referrer"`
 - 提供 DMCA 投诉页，承诺 48 小时内响应
 - Footer 包含联盟披露（Affiliate Disclosure）文字
 - 提供 Privacy Policy 与 Disclaimer 页面
 - 短视频链接优先使用长链（`www.douyin.com/video/xxx`）
 
 ### 绝对禁止
-- 除短视频封面（R2 对象存储）外，禁止存储任何媒体文件
+- 除短视频封面（R2 或仓库内 `public/covers/videos/`）外，禁止存储任何媒体文件
 - 禁止 iframe 嵌入播放 / 阅读
 - 禁止破解防盗链或技术措施
 - 禁止批量爬虫采集

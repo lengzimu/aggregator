@@ -1,5 +1,7 @@
 # Cloudflare R2 手动配置手册
 
+> **本手册是可选的**：短视频封面存储支持自动降级——**未配置 R2 时，封面会自动落仓库 `public/covers/videos/`（`coverUrl` 记站内相对路径），零信用卡、零配置即可运行**。本手册仅在你想用 R2 做规模化存储时才需要照做；代码已就绪，配好即生效。
+
 > 配套代码：
 > - `scripts/lib/r2.mjs` —— 本地脚本 / CI 用（S3 兼容 API + AWS SigV4，零依赖）
 > - `scripts/store-cover.mjs` —— 封面上传 CLI
