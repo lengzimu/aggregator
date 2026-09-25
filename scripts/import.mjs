@@ -13,6 +13,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getSource, isWhitelistedHost } from './lib/sources.mjs';
 import { toJson, writePending } from './lib/markdown.mjs';
+import { isR2Configured, storeCoverFromUrl } from './lib/r2.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -65,6 +66,23 @@ async function main() {
       origin: 'csv',
       metrics: item.metrics || undefined,
     };
+    // 短视频封面特殊性：抖音/TikTok 外链带防盗链且易失效，必须存储。
+    // STORE_COVERS=1 且有 R2 凭据时，把 coverUrl 外链抓到 R2、替换为 R2 公开 URL；
+    // 失败则保留原外链（不阻断导入），并提示人工补封面。
+    if (
+      src.collection === 'videos' &&
+      item.coverUrl &&
+      /^https?:/i.test(item.coverUrl) &&
+      process.env.STORE_COVERS === '1' &&
+      isR2Configured()
+    ) {
+      try {
+        fm.coverUrl = await storeCoverFromUrl(item.coverUrl, slug);
+      } catch (e) {
+        console.warn(`  ⚠️ 封面上传 R2 失败，保留原外链：${e.message}`);
+      }
+    }
+
     const md = toJson(fm);
     if (!DRY) await writePending(src.collection, slug, md);
     report.push({ title: item.title, platform: item.platform, status: 'pending', slug });

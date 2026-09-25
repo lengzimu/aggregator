@@ -13,6 +13,17 @@ pages_build_output_dir = "dist"
 # binding = "RATE_LIMIT_KV"
 # id = "your-kv-namespace-id"
 
+# ── 短视频封面存储（Cloudflare R2）──────────────────────────────
+# 生产绑定请在 Cloudflare 控制台完成（git push 自动生效）：
+#   1) R2 桶绑定： Pages → 项目 → Settings → Bindings → 添加 R2 桶，
+#      变量名填 COVER，绑定到封面桶（供 functions/api/cover.ts 直传）
+#   2) 环境变量： Pages → Settings → Environment variables 添加
+#      R2_PUBLIC_URL = https://<bucket>.r2.dev  （或自定义域，供函数返回公开 URL）
+#      COVER_UPLOAD_TOKEN = <长随机串>          （functions/api/cover.ts 上传口令）
+# 本地脚本 / CI（store-cover.mjs、import.mjs 的 STORE_COVERS=1）用 S3 API，
+# 需要 R2 凭据（非绑定）：R2_ACCOUNT_ID / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
+# CI 请在仓库 Secrets 配置上述四项 + R2_PUBLIC_URL。
+
 # Cloudflare Pages 构建时环境变量
 [vars]
 PUBLIC_SITE_URL = "https://aggregator-9w7.pages.dev"

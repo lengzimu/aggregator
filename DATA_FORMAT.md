@@ -69,7 +69,7 @@ Astro Content Collections 的模型就是 **「一个条目 = 一个文件」**�
 | `creator` / `author` | creator | author | author | 作者/UP 主 |
 | `platform` | ✓ | ✓ | ✓ | 必须在白名单 |
 | `sourceUrl` | ✓ | ✓ | ✓ | 跳转目标（原站长链） |
-| `coverUrl` | **短视频必填** | 可选 | 可选 | 漫画/小说填原站外链，失效回退 `default-cover.svg`；**短视频封面必须本地存储**，填 `/covers/videos/<slug>.jpg`（见下文「短视频封面本地存储」）。整字段删除，不置空串 |
+| `coverUrl` | **短视频必填** | 可选 | 可选 | 漫画/小说填原站外链，失效回退 `default-cover.svg`；**短视频封面必须存于 R2**，填 R2 公开 URL（见下文「短视频封面存储（R2）」）。整字段删除，不置空串 |
 | `language` | ✓ | ✓ | ✓ | zh / en |
 | `tags` | ✓（可空） | ✓ | ✓ | 短视频允许空数组 |
 | `review` | 可选 | 可选 | 可选 | 40–120 字编辑短评，写**增量信息**不写剧情简介 |
@@ -164,16 +164,18 @@ editorial（专题长文）因含长文正文，保留 Markdown（`type: 'conten
 
 ---
 
-## 五之二、短视频封面本地存储（唯一存储例外）
+## 五之二、短视频封面存储（R2，唯一存储例外）
 
-短视频平台的封面普遍带防盗链、原始链接易失效，因此**短视频封面由本站本地存储**，漫画/小说封面仍走原站外链。
+短视频平台的封面普遍带防盗链、原始链接易失效，因此**短视频封面存于 Cloudflare R2 对象存储**，漫画/小说封面仍走原站外链。封面二进制不进 git 历史，仓库只记录 R2 公开 URL。
 
-- 封面二进制放入 `public/covers/videos/<slug>.<ext>`，随站点部署，在线地址为 `https://<域名>/covers/videos/<slug>.<ext>`。
-- 仓库里**只记录链接**（`coverUrl: "/covers/videos/<slug>.jpg"`），不把图塞进 `src/content/`。
+- 封面对象键形如 `videos/<slug>.<ext>`，公开地址为 `https://<bucket>.r2.dev/videos/<slug>.<ext>`（或自定义域）。
+- `coverUrl` 填该 R2 公开 URL，不要塞进 `src/content/`，也不要填抖音/TikTok 外链（会被防盗链拦截）。
 - `<slug>` 与对应 JSON 文件名一致，便于追踪生命周期。
-- 第三方推送的完整规范、字段表、示例见 **[`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md)**。
+- 第三方推送的完整规范、字段表、示例、上传方式见 **[`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md)**。
 
-> 定位修正：本站不再是「纯链接索引服务」——它是「链接索引服务 + 短视频封面本地存储」。除短视频封面外，不存储任何媒体文件。
+> 定位修正：本站不再是「纯链接索引服务」——它是「链接索引服务 + 短视频封面对象存储」。除短视频封面外，不存储任何媒体文件。
+
+> 为什么用 R2 而不是仓库内 `public/covers`：Cloudflare Pages 单次部署上限 **20,000 文件**，且封面进 git 历史会膨胀仓库（GitHub 推荐 < 1 GB）；R2 免费 10 GB、出网费为零、S3 兼容，脚本与 CI 可直接 PUT。详见 THIRD_PARTY_PUSH.md 第 4 节。
 
 ---
 
