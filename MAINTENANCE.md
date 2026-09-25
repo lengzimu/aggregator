@@ -59,7 +59,7 @@ node scripts/add-entry.mjs --type videos --title "拉花教学" --platform 抖�
 | `platform` | ✓ | 须命中该类型平台白名单 |
 | `creator` / `author` | ✓ | 短视频用 creator，漫画/小说用 author |
 | `pubDate` | ✓ | 收录日期 `YYYY-MM-DD` |
-| `coverUrl` | — | 封面外链；缺省时**整字段省略**（不要写空串） |
+| `coverUrl` | 短视频必填 | 短视频封面当前默认落仓库 `public/covers/videos/`（写站内相对路径 `/covers/videos/<slug>.jpg`）；漫画/小说填原站外链。缺省时**整字段省略**（不要写空串） |
 | `metrics` | — | `{rating,views,growth,rank,subscribers,capturedAt}` 部分即可 |
 | `review` | 有指标时必填 | 40–200 字原创短评（编辑精选准入） |
 | `tags` / `sourceId` / `language` / `status` | — | 可选 |
@@ -114,7 +114,7 @@ npm run prune:apply  # 同上（仍只列）；除非仓库变量 PRUNE_AUTO=1 �
 
 ## 常见坑
 
-1. **`coverUrl` 失效要整行删，不能置空串**——schema 是 `z.string().url()`，空串校验失败。
+1. **`coverUrl` 失效要整行删，不能置空串**——schema 接受「绝对 URL 或根相对路径 `/...`」，空串仍会校验失败。
 2. **`review` 为空进不了编辑精选**——有 `metrics` 就必须写，否则首页/列表的精选板块会缺这条。
 3. **中文文件名（slug）**——URL 与 SEO 都受影响，CI 的 slugify `--scan` 会扫出，严禁。
 4. **详情页不索引**——正文写在详情页白写；原创文本只投在列表卡片 `review` 与专题长文。

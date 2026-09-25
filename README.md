@@ -161,6 +161,7 @@ node scripts/add-entry.mjs --type videos --title "拉花教学" --platform 抖�
 
 - `sourceUrl`：**必填**，跳转目标（原站长链优先）。
 - `coverUrl`：漫画/小说填**原站外链**（失效自动回退 `default-cover.svg`）；**短视频封面必须存储**——配 R2 填 R2 公开 URL（如 `https://<bucket>.r2.dev/videos/<slug>.jpg`），未配 R2 填仓库内相对路径 `/covers/videos/<slug>.jpg`（封面文件放 `public/covers/videos/`）。缺省时**整字段省略**，不要写空串。封面如何上传见 [`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md) 第 4 节。
+> **当前状态（2026-09-25）**：线上暂未配置 R2，短视频封面**默认落仓库 `public/covers/videos/`**（站内相对路径），提交即生效，无需任何云存储或信用卡。
 - `metrics`：可选，热度指标（rating / views / growth / rank / subscribers / capturedAt）。有指标就必须写 `review`，否则进不了「编辑精选」。
 - `review`：**强烈建议填写**（40–200 字）。这是列表页上唯一的原创文本，直接对抗薄内容判定。
   规范见 `config.ts` 注释 —— 只写源站没有的增量信息（适合谁 / 看点 / 避雷 / 更新是否稳定），
