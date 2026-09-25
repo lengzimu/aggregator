@@ -315,7 +315,8 @@ export async function removeCover(coverUrl, { root, allowLocal = true } = {}) {
     }
   }
   if (allowLocal && coverUrl.startsWith('/')) {
-    const localPath = join(root || process.cwd(), coverUrl.replace(/^\/+/, ''));
+    // web 路径 /covers/videos/x.jpg 对应磁盘路径 public/covers/videos/x.jpg
+    const localPath = join(root || process.cwd(), 'public', coverUrl.replace(/^\/+/, ''));
     try {
       await unlink(localPath);
       return true;
