@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import https from 'node:https';
+import { removeCover } from './lib/r2.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -117,7 +118,17 @@ async function processFile(filePath, type) {
   const src = await request(sourceUrl);
   await sleep(DELAY_MS);
   if (src.status === 404 || src.status === 410) {
-    console.log(`  🗑️  源链接已下架 (${src.status}): ${sourceUrl} → 移入 removed/`);
+    // 下架前先清理封面文件（本地仓库内 / R2），避免孤儿封面
+    let coverNote = '';
+    if (coverUrl) {
+      try {
+        const removed = await removeCover(coverUrl, { root: ROOT });
+        if (removed) coverNote = '（封面已同步清理）';
+      } catch (e) {
+        coverNote = `（封面清理失败：${e.message}）`;
+      }
+    }
+    console.log(`  🗑️  源链接已下架 (${src.status}): ${sourceUrl} → 移入 removed/${coverNote}`);
     const removedPath = path.join(REMOVED_DIR, `${type}-${basename}`);
     fs.renameSync(filePath, removedPath);
     return 'removed';

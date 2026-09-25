@@ -14,7 +14,7 @@
 // 把封面写入仓库 public/covers/<prefix>/（站内相对路径），无需任何信用卡。
 
 import { createHash, createHmac } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import { resolve, join, extname, basename } from 'node:path';
 
 const R2_ENDPOINT_HOST = (accountId) => `${accountId}.r2.cloudflarestorage.com`;
@@ -210,4 +210,118 @@ export async function storeCover(source, slug, { prefix = 'videos', localDir, al
     return await storeCoverLocal(source, slug, { prefix, localDir });
   }
   throw new Error('R2 not configured and local fallback disabled');
+}
+
+// ────────────────────────────────────────────────────────────
+// 封面删除（下架 / 删除条目时同步清理，避免孤儿文件）
+// ────────────────────────────────────────────────────────────
+
+/** 该 coverUrl 是否为本桶的 R2 公开地址 */
+export function isR2Url(coverUrl) {
+  const base = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+  return Boolean(base) && typeof coverUrl === 'string' && coverUrl.startsWith(base);
+}
+
+/** 从 R2 公开 URL 提取对象键（失败返回 null） */
+export function coverKeyFromUrl(coverUrl) {
+  const base = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+  if (base && typeof coverUrl === 'string' && coverUrl.startsWith(base)) {
+    return coverUrl.slice(base.length).replace(/^\/+/, '');
+  }
+  return null;
+}
+
+/**
+ * DELETE 一个 R2 对象（SigV4，payload 用 UNSIGNED-PAYLOAD）。
+ * @param {string} key 对象键，如 videos/coffee-art.jpg
+ */
+export async function deleteObject(key) {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const bucket = process.env.R2_BUCKET;
+  const accessKey = process.env.R2_ACCESS_KEY_ID;
+  const secretKey = process.env.R2_SECRET_ACCESS_KEY;
+  if (!accountId || !bucket || !accessKey || !secretKey) {
+    throw new Error('R2 not configured, cannot deleteObject');
+  }
+  const region = 'auto';
+  const service = 's3';
+  const host = R2_ENDPOINT_HOST(accountId);
+  const url = `https://${host}/${bucket}/${key}`;
+  const payloadHash = 'UNSIGNED-PAYLOAD';
+  const t = amzDate();
+  const dateStamp = t.slice(0, 8);
+
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalHeaders =
+    `host:${host}\n` +
+    `x-amz-content-sha256:${payloadHash}\n` +
+    `x-amz-date:${t}\n`;
+  const canonicalRequest = [
+    'DELETE',
+    `/${bucket}/${key}`,
+    '',
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    t,
+    scope,
+    sha256Hex(canonicalRequest),
+  ].join('\n');
+
+  const kDate = hmac('AWS4' + secretKey, dateStamp);
+  const kRegion = hmac(kDate, region);
+  const kService = hmac(kRegion, service);
+  const kSigning = hmac(kService, 'aws4_request');
+  const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+
+  const authorization =
+    `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, ` +
+    `SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': t,
+      Authorization: authorization,
+    },
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`R2 DELETE ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  return true;
+}
+
+/**
+ * 删除一条封面：R2 公开 URL 走 R2，站内相对路径走本地文件系统。
+ * 第三方图床 URL（既非 R2 也非站内路径）不处理。
+ * @param {string} coverUrl
+ * @param {{root?:string, allowLocal?:boolean}} [opts] root 为仓库根（站内相对路径前缀）
+ * @returns {Promise<boolean>} 是否执行了删除动作
+ */
+export async function removeCover(coverUrl, { root, allowLocal = true } = {}) {
+  if (!coverUrl || typeof coverUrl !== 'string') return false;
+  if (isR2Url(coverUrl)) {
+    const key = coverKeyFromUrl(coverUrl);
+    if (key) {
+      await deleteObject(key);
+      return true;
+    }
+  }
+  if (allowLocal && coverUrl.startsWith('/')) {
+    const localPath = join(root || process.cwd(), coverUrl.replace(/^\/+/, ''));
+    try {
+      await unlink(localPath);
+      return true;
+    } catch {
+      return false; // 文件不存在或删除失败：best-effort，不阻断下架
+    }
+  }
+  return false;
 }

@@ -17,6 +17,7 @@ import { readdir, readFile, rename, mkdir, writeFile, unlink } from 'node:fs/pro
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isWhitelistedHost } from './lib/sources.mjs';
+import { removeCover } from './lib/r2.mjs';
 import { classifyLiveness } from './lib/review.mjs';
 import { toJson } from './lib/markdown.mjs';
 
@@ -121,6 +122,14 @@ async function pruneEntry(col, file) {
       takedownDate: new Date().toISOString().slice(0, 10),
       takedownMethod: 'auto-prune',
     });
+    // 下架前先清理封面文件（仓库内 / R2），避免孤儿封面
+    if (data.coverUrl) {
+      try {
+        await removeCover(data.coverUrl, { root: ROOT });
+      } catch (e) {
+        console.log(`  ⚠️ 封面清理失败 ${col}/${file}: ${e.message}`);
+      }
+    }
     await mkdir(removedDir, { recursive: true });
     await writeFile(removedPath, updated, 'utf8');
     await unlink(srcPath);

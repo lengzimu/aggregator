@@ -20,6 +20,11 @@ interface KV {
   put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
 }
 
+// 最小 R2 桶接口（Cloudflare 运行时原生满足，绑定名为 COVER）
+interface R2BucketLike {
+  delete(key: string): Promise<void>;
+}
+
 interface Env {
   GITHUB_TOKEN?: string;
   GITHUB_REPO?: string;
@@ -27,7 +32,11 @@ interface Env {
   RATE_LIMIT_KV?: KV;
   RATE_LIMIT_MAX?: string;
   RATE_LIMIT_WINDOW_SEC?: string;
+  COVER?: R2BucketLike;
+  R2_PUBLIC_URL?: string;
 }
+
+const GH_API = 'https://api.github.com';
 
 const TYPES = new Set(['videos', 'comics', 'novels']);
 
@@ -165,6 +174,64 @@ export async function checkRateLimit(
   return { limited, limit: max, remaining, resetAt, retryAfterSec, headers };
 }
 
+// 经 GitHub API 删除仓库内一个文件（best-effort），用于清理站内相对路径封面
+async function githubDeleteFile(
+  repo: string,
+  filePath: string,
+  branch: string,
+  ghHeaders: Record<string, string>,
+): Promise<boolean> {
+  const getRes = await fetch(`${GH_API}/repos/${repo}/contents/${filePath}?ref=${branch}`, {
+    headers: ghHeaders,
+  });
+  if (!getRes.ok) return false;
+  const f: any = await getRes.json().catch(() => null);
+  if (!f || !f.sha) return false;
+  const delRes = await fetch(`${GH_API}/repos/${repo}/contents/${filePath}`, {
+    method: 'DELETE',
+    headers: ghHeaders,
+    body: JSON.stringify({
+      message: `takedown: remove cover ${filePath}`,
+      sha: f.sha,
+      branch,
+      committer: { name: 'HubLinks DMCA', email: 'dmca@hublinks.example' },
+    }),
+  });
+  return delRes.ok;
+}
+
+// 下架后清理封面（best-effort，失败不阻断下架）：
+//  - R2 公开 URL → 经 COVER 绑定删除
+//  - 站内相对路径（/covers/videos/...）→ 经 GitHub API 删仓库内 git 文件
+//  - 第三方图床 URL → 不处理（非本站资源）
+async function cleanupCover(
+  coverUrl: string | undefined,
+  env: Env,
+  repo: string,
+  branch: string,
+  ghHeaders: Record<string, string>,
+): Promise<void> {
+  if (!coverUrl || typeof coverUrl !== 'string') return;
+  const r2Base = (env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+  if (env.COVER && r2Base && coverUrl.startsWith(r2Base)) {
+    const key = coverUrl.slice(r2Base.length).replace(/^\/+/, '');
+    try {
+      await env.COVER.delete(key);
+    } catch (e) {
+      console.error('cover R2 delete failed', e);
+    }
+    return;
+  }
+  if (coverUrl.startsWith('/')) {
+    const filePath = `public${coverUrl}`;
+    try {
+      await githubDeleteFile(repo, filePath, branch, ghHeaders);
+    } catch (e) {
+      console.error('cover git delete failed', e);
+    }
+  }
+}
+
 export async function onRequestPost(context: { request: Request; env: Env }) {
   const { request, env } = context;
 
@@ -217,7 +284,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     return json({ ok: false, fallback: true, message: 'takedown endpoint not configured' }, 200, rlHeaders);
   }
 
-  const api = 'https://api.github.com';
+  const api = GH_API;
   const ghHeaders = {
     Authorization: `Bearer ${env.GITHUB_TOKEN}`,
     'User-Agent': 'hublinks-dmca',
@@ -230,8 +297,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     if (!repoRes.ok) return json({ ok: false, error: 'repo lookup failed' }, 502, rlHeaders);
     const branch = (await repoRes.json()).default_branch || 'main';
 
-    const srcPath = `src/content/${target.type}/${target.slug}.md`;
-    const dstPath = `removed/${target.type}/${target.slug}.md`;
+    const srcPath = `src/content/${target.type}/${target.slug}.json`;
+    const dstPath = `removed/${target.type}/${target.slug}.json`;
 
     // 2) 读取源文件
     const getRes = await fetch(
@@ -243,6 +310,14 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     }
     if (!getRes.ok) return json({ ok: false, error: 'read failed' }, 502, rlHeaders);
     const file = await getRes.json();
+    // 解析封面地址（用于下架后清理资源）
+    let coverUrl: string | undefined;
+    try {
+      const raw = Buffer.from(file.content, 'base64').toString('utf8');
+      coverUrl = JSON.parse(raw).coverUrl;
+    } catch {
+      /* 解析失败：跳过封面清理 */
+    }
 
     // 3) 在 removed/ 创建副本
     const putRes = await fetch(`${api}/repos/${env.GITHUB_REPO}/contents/${dstPath}`, {
@@ -269,6 +344,9 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       }),
     });
     if (!delRes.ok) return json({ ok: false, error: 'delete source failed' }, 502, rlHeaders);
+
+    // 下架后清理封面（best-effort，不阻断主流程）
+    await cleanupCover(coverUrl, env, env.GITHUB_REPO, branch, ghHeaders);
 
     return json({ ok: true, removed: `${target.type}/${target.slug}` }, 200, rlHeaders);
   } catch (e: any) {

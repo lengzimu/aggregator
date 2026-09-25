@@ -169,6 +169,8 @@ curl -X POST https://<你的域名>/api/cover \
 - 体积：尽量 < 200 KB（`/api/cover` 上限 5 MB）。
 - **务必先传封面、拿到地址再提交 JSON**：`coverUrl` 失效，每日巡检会清空该字段、回退默认封面。
 - 方式 B 把二进制放 `public/covers/videos/`（与 JSON 同提交）；方式 A/C 不往仓库放二进制。
+
+> 闭环：条目被下架时（DMCA 表单 / 存活巡检 `check-links.js` / `prune` 自动下架）会**同步删除其封面文件**——仓库内封面经 git 删除、R2 封面经 `deleteObject` 删除，不会残留孤儿文件。第三方图床 URL 不在本站资源内，不处理。
 - `coverUrl` schema 同时接受「绝对 URL」与「根相对路径 `/...`」，三种写法都合法。
 
 ### 4.5 运维侧：R2 桶与凭据配置（仅选方式 A 时需要，一次性）
