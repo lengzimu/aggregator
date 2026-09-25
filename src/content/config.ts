@@ -43,7 +43,8 @@ const metricsSchema = z
 const baseFields = {
   title: z.string(),
   sourceUrl: z.string().url(),
-  coverUrl: z.string().url().optional(),
+  // 允许绝对 URL（漫画/小说原站外链）或根相对路径（短视频封面本地存储：/covers/videos/<slug>.jpg）
+  coverUrl: z.union([z.string().url(), z.string().startsWith('/')]).optional(),
   /** 语种：zh 中文 / en 英文 */
   language: z.enum(LANGUAGES).default('zh'),
   tags: z.array(z.string()).default([]),

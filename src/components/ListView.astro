@@ -89,11 +89,11 @@ const introText = platform
 
 const metaDescription = platform
   ? lang === 'en'
-    ? `Hand-picked ${typeName.toLowerCase()} on ${platformLabel}. Click any card to open the official source — nothing is hosted here.`
-    : `精选 ${platformLabel} 的正版${typeName}，点击卡片直达原站，本站不存储任何内容。`
+    ? `Hand-picked ${typeName.toLowerCase()} on ${platformLabel}. Click any card to open the official source — only short-video covers are stored locally.`
+    : `精选 ${platformLabel} 的正版${typeName}，点击卡片直达原站；本站除短视频封面外不存储任何媒体内容。`
   : lang === 'en'
-    ? `Hand-picked ${typeName.toLowerCase()} from official platforms. Click any card to open the source — nothing is hosted here.`
-    : `精选正版平台的${typeName}，点击卡片直达原站，本站不存储任何内容。`;
+    ? `Hand-picked ${typeName.toLowerCase()} from official platforms. Click any card to open the source — only short-video covers are stored locally.`
+    : `精选正版平台的${typeName}，点击卡片直达原站；本站除短视频封面外不存储任何媒体内容。`;
 
 const emptyText =
   lang === 'en'
@@ -192,8 +192,8 @@ const methodology =
       <p class="mt-1 text-xs text-slate-400">
         {
           lang === 'en'
-            ? `${sorted.length} ${sorted.length === 1 ? 'title' : 'titles'} · Click a card to open the official source. Nothing is hosted here.`
-            : `共 ${sorted.length} 部 · 点击卡片将跳转到原站，本站不存储任何内容。`
+            ? `${sorted.length} ${sorted.length === 1 ? 'title' : 'titles'} · Click a card to open the official source. Only short-video covers are stored locally.`
+            : `共 ${sorted.length} 部 · 点击卡片将跳转到原站；本站除短视频封面外不存储任何媒体内容。`
         }
       </p>
       {

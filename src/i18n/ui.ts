@@ -28,9 +28,9 @@ export const ui = {
     'nav.editorial': '专题',
     'nav.editorialPolicy': '收录标准',
 
-    'hero.badge': '纯链接索引 · 零媒体存储',
+    'hero.badge': '内容发现与导流 · 短视频封面本地存储',
     'hero.title': '发现值得一看的优质内容',
-    'hero.desc': '我们精选短视频、漫画与小说，只做链接索引——点击即跳转原站，内容版权归原作者与平台所有。',
+    'hero.desc': '我们精选短视频、漫画与小说，只做链接索引与导流——点击即跳转原站；短视频封面本地存储，其余内容版权归原作者与平台所有。',
     'hero.ctaBrowse': '开始浏览',
     'hero.ctaAbout': '了解本站',
 
@@ -66,7 +66,7 @@ export const ui = {
     'metric.rankSuffix': '名',
 
     'list.countPrefix': '共',
-    'list.countSuffix': '部 · 点击卡片将跳转到原站，本站不存储任何内容。',
+    'list.countSuffix': '部 · 点击卡片将跳转到原站；本站除短视频封面外不存储任何媒体内容。',
 
     'editorial.title': '专题推荐',
     'editorial.subtitle': '编辑原创的长文赏析与精选合集，每篇都围绕一个明确的选片角度展开。',
@@ -85,7 +85,7 @@ export const ui = {
     'metric.updatedAt': '数据更新于',
     'list.browseByPlatform': '按平台浏览',
     'list.platformIntro':
-      '仅收录来自 {platform} 的正版{type}，点击卡片直达原站，本站不存储任何内容。',
+      '仅收录来自 {platform} 的正版{type}，点击卡片直达原站；本站除短视频封面外不存储任何媒体内容。',
     'list.relatedEditorial': '相关专题推荐',
 
     'picks.title': '编辑精选',
@@ -108,9 +108,9 @@ export const ui = {
     'redirect.desc': '即将带你前往原站：',
     'redirect.manual': '如果没有自动跳转，请点击下面的链接。',
     'redirect.target': '前往原站',
-    'redirect.notice': '本站仅提供链接索引，不托管任何内容。',
+    'redirect.notice': '本站除短视频封面本地存储外，不托管任何媒体内容。',
 
-    'footer.about': '内容发现与导流站。本站仅为链接索引服务，不存储、不托管任何媒体内容。',
+    'footer.about': '内容发现与导流站。本站仅本地存储短视频封面，其余内容均通过外链与 302 跳转导流至原站，不存储视频 / 正文等媒体文件。',
     'footer.browse': '浏览',
     'footer.site': '关于本站',
     'footer.aboutUs': '关于我们',
@@ -203,7 +203,7 @@ export const ui = {
     'metric.updatedAt': 'Data updated',
     'list.browseByPlatform': 'Browse by platform',
     'list.platformIntro':
-      'Only {type} from {platform}. Every card opens the official source — nothing is hosted here.',
+      'Only {type} from {platform}. Every card opens the official source — only short-video covers are stored locally.',
     'list.relatedEditorial': 'Related editorial',
 
     'pagination.prev': 'Previous',

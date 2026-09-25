@@ -69,7 +69,7 @@ Astro Content Collections 的模型就是 **「一个条目 = 一个文件」**�
 | `creator` / `author` | creator | author | author | 作者/UP 主 |
 | `platform` | ✓ | ✓ | ✓ | 必须在白名单 |
 | `sourceUrl` | ✓ | ✓ | ✓ | 跳转目标（原站长链） |
-| `coverUrl` | 可选 | 可选 | 可选 | 失效自动回退 `default-cover.svg`（整字段删除，不置空串） |
+| `coverUrl` | **短视频必填** | 可选 | 可选 | 漫画/小说填原站外链，失效回退 `default-cover.svg`；**短视频封面必须本地存储**，填 `/covers/videos/<slug>.jpg`（见下文「短视频封面本地存储」）。整字段删除，不置空串 |
 | `language` | ✓ | ✓ | ✓ | zh / en |
 | `tags` | ✓（可空） | ✓ | ✓ | 短视频允许空数组 |
 | `review` | 可选 | 可选 | 可选 | 40–120 字编辑短评，写**增量信息**不写剧情简介 |
@@ -161,6 +161,19 @@ editorial（专题长文）因含长文正文，保留 Markdown（`type: 'conten
 - 自动采集的条目 `sourceId` 必填，因此文件名天然走「方案 1」，不会撞中文名。
 - 半自动录入走 `import.mjs`（读 `data/import.json` → 写 `data/pending/<type>/<slug>.json`）。
 - 失效链接巡检走 `check-links.js`（读 JSON，失效封面整字段删 `coverUrl`，源站下架则移入 `removed/`）。
+
+---
+
+## 五之二、短视频封面本地存储（唯一存储例外）
+
+短视频平台的封面普遍带防盗链、原始链接易失效，因此**短视频封面由本站本地存储**，漫画/小说封面仍走原站外链。
+
+- 封面二进制放入 `public/covers/videos/<slug>.<ext>`，随站点部署，在线地址为 `https://<域名>/covers/videos/<slug>.<ext>`。
+- 仓库里**只记录链接**（`coverUrl: "/covers/videos/<slug>.jpg"`），不把图塞进 `src/content/`。
+- `<slug>` 与对应 JSON 文件名一致，便于追踪生命周期。
+- 第三方推送的完整规范、字段表、示例见 **[`docs/THIRD_PARTY_PUSH.md`](./docs/THIRD_PARTY_PUSH.md)**。
+
+> 定位修正：本站不再是「纯链接索引服务」——它是「链接索引服务 + 短视频封面本地存储」。除短视频封面外，不存储任何媒体文件。
 
 ---
 

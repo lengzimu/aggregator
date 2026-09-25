@@ -18,14 +18,15 @@ export const staticPages = {
   about: {
     zh: {
       title: '关于我们',
-      intro: 'HubLinks 是一个内容发现与导流站。我们只做一件事：把值得一看的内容，用一条链接指回它的官方出处。',
+      intro: 'HubLinks 是一个内容发现与导流站。我们只做一件事：把值得一看的内容，用一条链接指回它的官方出处；其中短视频封面由本站本地存储，其余内容仅提供跳转。',
       updated: '内容收录原则',
       sections: [
         {
-          heading: '我们不托管任何内容',
+          heading: '我们托管什么 / 不托管什么',
           paragraphs: [
-            '本站不存储、不缓存、不转码任何视频、图片或小说正文。所有封面图均通过外链引用，所有正文阅读与视频观看都发生在原站。',
-            '点击任意条目，你会通过一条跳转链接到达内容所在的官方平台。跳转页面本身不承载任何受版权保护的材料。',
+            '本站不存储、不缓存、不转码任何视频或小说正文；漫画 / 小说封面图均通过原站外链引用。',
+            '唯一例外是**短视频封面**：因短视频平台普遍带防盗链、原始链接易失效，短视频封面由本站下载并本地存储——仓库里只记录封面链接地址，二进制文件随站点一起部署，以保障卡片稳定显示。',
+            '点击任意条目，你会通过一条跳转链接到达内容所在的官方平台。跳转页面本身不承载任何受版权保护的材料（短视频封面是本站唯一本地保存的媒体）。',
           ],
         },
         {
@@ -55,14 +56,15 @@ export const staticPages = {
     en: {
       title: 'About us',
       intro:
-        'HubLinks is a content discovery hub. We do exactly one thing: point you back to the official source with a single link.',
+        'HubLinks is a content discovery and redirection hub. We do exactly one thing: point you back to the official source with a single link — short-video covers are stored locally; everything else is just a link.',
       updated: 'What we index',
       sections: [
         {
-          heading: 'We host nothing',
+          heading: 'What we host / don\'t host',
           paragraphs: [
-            'We do not store, cache or transcode any video, image or novel text. Cover images are referenced remotely; reading and watching always happen on the source platform.',
-            'Clicking any entry takes you through a redirect to the official platform that publishes the work. The redirect page itself carries no copyrighted material.',
+            'We do not store, cache or transcode any video or novel text; comic / novel cover images are referenced remotely from the source platform.',
+            'The one exception is **short-video covers**: because short-video platforms enforce hotlink protection and their cover URLs expire quickly, short-video covers are downloaded and stored locally by this site — the repository records only the cover link, and the binary is deployed with the site, so cards render reliably.',
+            'Clicking any entry takes you through a redirect to the official platform that publishes the work. The redirect page itself carries no copyrighted material (the short-video cover is the only media we keep locally).',
           ],
         },
         {
@@ -189,9 +191,9 @@ export const staticPages = {
       updated: '最后更新：见页面底部',
       sections: [
         {
-          heading: '链接索引服务',
+          heading: '链接索引服务（短视频封面本地存储）',
           paragraphs: [
-            '本站是链接索引服务，功能等同于一个经过人工筛选的收藏夹。我们不对第三方网站上的内容负责，也无法控制其内容、可用性或隐私实践。',
+            '本站是内容发现与导流服务，功能等同于一个经过人工筛选的收藏夹。除短视频封面由本站本地存储外，我们不托管、不复制任何受版权保护的视频或正文材料；我们不对第三方网站上的内容负责，也无法控制其内容、可用性或隐私实践。',
           ],
         },
         {
@@ -221,9 +223,9 @@ export const staticPages = {
       updated: 'Last updated: see footer',
       sections: [
         {
-          heading: 'A link index service',
+          heading: 'A link index service (short-video covers stored locally)',
           paragraphs: [
-            'This site is a link index — functionally a hand-filtered bookmark collection. We are not responsible for content on third-party sites and cannot control what they publish, whether they stay online, or how they handle privacy.',
+            'This site is a content-discovery and redirection service — functionally a hand-filtered bookmark collection. Except for short-video covers, which we store locally, we do not host or copy any copyrighted video or text. We are not responsible for content on third-party sites and cannot control what they publish, whether they stay online, or how they handle privacy.',
           ],
         },
         {
@@ -369,7 +371,7 @@ export const staticPages = {
         {
           heading: 'What we cannot do',
           paragraphs: [
-            'This site hosts no copyrighted files, so there is no infringing copy on our servers to remove. Every work stays on the platform that published it.',
+            'This site hosts no copyrighted video or text — the only media we keep locally is short-video cover images, which are factual thumbnails, not the works themselves. There is no infringing copy of any work on our servers to remove; every work stays on the platform that published it.',
             'If your work was posted without authorisation on a third-party platform, complain to that platform — that is where the content actually lives.',
           ],
         },
