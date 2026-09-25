@@ -199,40 +199,43 @@ curl -X POST https://<你的域名>/api/cover \
 
 ---
 
-## 5.1 下架回传：采集侧判定 → 本站自动下架（抖音 / TikTok 必读）
+## 5.1 下架回传：采集侧判定 → 推 JSON 给本站执行下架（抖音 / TikTok 必读）
 
 **为什么不在本站直接判下架**：抖音 / TikTok 的「是否已下架」无法从海外 CI 用裸 HTTP 判定——抖音对任何视频（含已下架）都返回 200 风控壳页面，HEAD 请求连正常视频也返回 404；TikTok 在海外出口常被整域封锁。可靠判定只能在**采集侧（中国本地，有真实 IP + 签名请求）**完成（例如你们的 `fetchVideoInfo` + `CollectorAbstract::isTakenDown`）。
 
-> 故采用「**采集侧判定 → 每天把已下架的条目推回本站**」的回流模式。本站不主动探测抖音死链，只接收结果并执行下架。
+> 故采用「**采集侧判定 → 每天把已下架的视频 ID 写成 JSON 推到本仓库**」的回流模式。本站不主动探测抖音死链，只读取结果并执行下架 + 清封面。
+> 复用本项目「GitHub 即 CMS」模型，**不需要 Cloudflare Function、不需要 Webhook 密钥**——中国侧直接往仓库提交一个 JSON 文件即可。
 
-### 5.1.1 调用方式
+### 5.1.1 中国侧怎么推送（极简）
 
-```
-POST /api/takedown
-Header: x-takedown-token: <TAKEDOWN_TOKEN>        # 本项目 Cloudflare 环境变量
-Body(JSON):
+每天把当天 `isTakenDown == true` 的条目，写成一个 JSON 推到仓库 `data/takedowns/` 目录（文件名随意，如 `queue.json` 或 `2026-09-25.json`）：
+
+```json
 {
-  "platform": "douyin",                            # 可选，仅用于日志
-  "items": [
-    "douyin:7663697146546694769",                  # 推荐：sourceId（与本地文件名 sourceId 字段一致）
-    "7663697146546694769",                         # 或纯数字抖音视频 ID（自动拼为 douyin-<id>）
-    "tiktok:abc123"                                # 其它平台按 platform:id → <platform>-<id>
+  "platform": "douyin",
+  "takenDown": [
+    "7663697146546694769",          // 纯数字抖音视频 ID（推荐，最稳）
+    "douyin:7663697146546694769",   // 或 sourceId 形式，同样认
+    "tiktok:abc123"                  // 其它平台按 platform:id
   ]
 }
 ```
 
-- 鉴权口令 `TAKEDOWN_TOKEN` 与封面端点的 `x-cover-token` 同一风格，在 Cloudflare Pages → Settings → Environment variables 配置；未配置时端点返回 `{ ok:false, fallback:true }`。
-- 需要的环境变量：`TAKEDOWN_TOKEN` + `GITHUB_TOKEN`（contents: write）+ `GITHUB_REPO`（owner/repo）。封面清理复用 `COVER` / `R2_PUBLIC_URL` 绑定（与 DMCA 端点一致）。
-- 单次最多 500 条。返回 `{ ok, processed, removed:[...], skipped:[...] }`（removed = 已下架 slug，skipped = 未找到或非抖音/ TikTok）。
+- 推法任选：① 中国侧服务用 GitHub API / PAT 直接 `commit` 该文件；② 开 PR；③ 甚至手动粘。
+- 推送后无需中国侧再做任何事——本站的每日 CI（`daily-check.yml`，北京时间 20:00）会跑 `npm run takedown` 自动处理。
 
-### 5.1.2 行为
+### 5.1.2 本站怎么处理（`scripts/apply-takedown.mjs`）
 
-对每个 item：解析 slug → 把 `src/content/videos/<slug>.json` 移到 `removed/videos-<slug>.json`（扁平命名，与 `npm run prune` / 链接巡检一致）→ 清理封面（R2 或仓库内 git 文件）→ 触发 Cloudflare Pages 重新部署即下架。
+对 JSON 里每个 ID：解析 slug → 命中 `src/content/videos/<slug>.json` 就移到 `removed/videos-<slug>.json`（扁平命名，与 `prune` / 链接巡检一致）并 `removeCover` 清封面（仓库内 `public/covers` 或 R2 自动降级）→ 触发重新部署即下架。处理完的 JSON 移到 `data/takedowns/archive/` 留痕。
+
+- ID 解析规则：`数字` → `douyin-<数字>`；`platform:id` 或 `platform:<id>` → `<platform>-<id>`。
+- 已不存在的 slug / 无法解析的 ID → 安全跳过（幂等，可重复跑）。
+- 手动触发：`npm run takedown`（先 `git pull` 拿到中国侧推的 JSON）。
 
 ### 5.1.3 你们（采集侧）参考实现要点
 
-- 复用现有 `CheckVideoOfflineTask` 的两阶段判定：`video_play_url` / `cover_url` 的 HEAD 404 快速判死，否则 `fetchVideoInfo` 经 `isTakenDown` 归一化兜底。
-- 把 `isTakenDown == true` 的条目，按 `sourceId`（如 `douyin:7663697146546694769`）汇总，每天定时 `POST /api/takedown` 回流即可。
+- 复用 `CheckVideoOfflineTask` 两阶段判定：`video_play_url` / `cover_url` 的 HEAD 404 快速判死，否则 `fetchVideoInfo` 经 `isTakenDown` 归一化兜底。
+- 把 `isTakenDown == true` 的**抖音视频数字 ID** 汇总进上面格式的 JSON，每天定时推到 `data/takedowns/` 即可。
 - **注意**：不要在本站侧直接 `GET https://www.douyin.com/video/<id>` 判死——海外出口拿到的永远是风控壳，必然误判（详见 `scripts/check-links.js` 注释）。
 
 ---

@@ -9,6 +9,7 @@
     "build": "astro build && pagefind --site dist && node scripts/generate-redirects.mjs && node scripts/generate-sitemap.mjs",
     "preview": "astro preview",
     "check:links": "node scripts/check-links.js",
+    "takedown": "node scripts/apply-takedown.mjs",
     "harvest": "node scripts/harvest.mjs",
     "harvest:webtoon": "node scripts/harvest.mjs --only webtoon",
     "import": "node scripts/import.mjs",

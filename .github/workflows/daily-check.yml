@@ -24,6 +24,9 @@ jobs:
           node-version: '20'
 
       # 该脚本仅使用 Node 内置模块，无需安装依赖
+      - name: Apply China-side takedown list (data/takedowns/*.json)
+        run: node scripts/apply-takedown.mjs
+
       - name: Run link check
         run: node scripts/check-links.js
 
@@ -31,7 +34,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/content/ removed/
+          git add src/content/ removed/ data/takedowns/
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
