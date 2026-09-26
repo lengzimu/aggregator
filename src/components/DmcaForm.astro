@@ -172,7 +172,13 @@ const config = JSON.stringify({ endpoint, repo, turnstileSiteKey, L });
 
   {turnstileSiteKey && (
     <>
-      <div class="cf-turnstile mt-4" data-sitekey={turnstileSiteKey}></div>
+      <div
+        class="cf-turnstile mt-4"
+        data-sitekey={turnstileSiteKey}
+        data-error-callback="dmcaTurnstileError"
+        data-timeout-callback="dmcaTurnstileError"
+        data-expired-callback="dmcaTurnstileReset"
+      ></div>
       <p class="dmca-error text-xs text-rose-600" data-error="cfToken" hidden></p>
       <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     </>
@@ -187,6 +193,13 @@ const config = JSON.stringify({ endpoint, repo, turnstileSiteKey, L });
       var msg = document.getElementById('dmca-msg');
       var btn = form.querySelector('button[type="submit"]');
       var btnText = btn.textContent;
+
+      // Turnstile 挂件出错/超时/过期时把真实错误原因显示在验证码栏，方便诊断（国内网络访问 challenges.cloudflare.com 不稳时会触发）
+      window.dmcaTurnstileError = function (code) {
+        setError('cfToken', (L.errCaptcha || '请完成安全验证') + (code ? ' (' + code + ')' : ''));
+        showMsg(L.formError, 'error');
+      };
+      window.dmcaTurnstileReset = function () { setError('cfToken', ''); };
 
       // 支持 /dmca/?page=/videos/xxx/（卡片「举报」入口）预填待下架页面链接
       try {
