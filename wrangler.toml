@@ -36,6 +36,10 @@ id = "05b0de1c7a8247598cd326c9ecc792aa"
 [vars]
 PUBLIC_SITE_URL = "https://aggregator-9w7.pages.dev"
 GITHUB_REPO = "lengzimu/aggregator"
+# Turnstile 站点密钥（前端 widget 用，公开无妨）；对应的服务端密钥 TURNSTILE_SECRET_KEY
+# 走仪表板「密钥」类型配置。缺一不可：只配 PUBLIC_TURNSTILE_SITE_KEY 而无 SECRET 时
+# 前端会渲染验证框但提交永远失败（siteverify 无密钥）。
+PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAAAFECQYKnQVy0RPuI"
 # 每窗口单 IP 最大 DMCA 提交数 / 窗口秒数（不配则默认 5 次 / 3600 秒）
 # RATE_LIMIT_MAX = "5"
 # RATE_LIMIT_WINDOW_SEC = "3600"
