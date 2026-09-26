@@ -158,10 +158,10 @@ const entryLang = data.language ?? 'zh';
     </div>
   </a>
 
-  {/* 举报入口：直达预填好本站路径的 DMCA 表单（悬停卡片时显示，不干扰版面） */}
+  {/* 举报入口：直达预填好本站路径的 DMCA 表单（常显但低调，不干扰版面） */}
   <a
     href={`/${lang === 'en' ? 'en/dmca/' : 'dmca/'}?page=${encodeURIComponent(`/${type}/${entry.id}/`)}`}
-    class="absolute bottom-2 right-2 z-10 rounded bg-white/95 px-1.5 py-0.5 text-[10px] text-slate-400 opacity-0 shadow-sm transition-opacity hover:text-rose-600 focus:opacity-100 group-hover:opacity-100"
+    class="absolute bottom-2 right-2 z-10 rounded bg-white/95 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-sm transition-colors hover:text-rose-600 focus:text-rose-600"
   >
     {lang === 'en' ? 'Report' : '举报'}
   </a>
