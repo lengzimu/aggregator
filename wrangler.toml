@@ -24,6 +24,18 @@ pages_build_output_dir = "dist"
 # 需要 R2 凭据（非绑定）：R2_ACCOUNT_ID / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
 # CI 请在仓库 Secrets 配置上述四项 + R2_PUBLIC_URL。
 
-# Cloudflare Pages 构建时环境变量
+# ── KV 频率限制（DMCA 端点 /api/dmca 单 IP 限流）────────────────
+# namespace 在仪表板创建（dmca-rate-limit），绑定经本文件声明（wrangler.toml 托管模式）
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "05b0de1c7a8247598cd326c9ecc792aa"
+
+# ── Cloudflare Pages 构建时环境变量 ──────────────────────────────
+# 普通文本变量只能在这里管理（wrangler.toml 托管模式，仪表板仅可配机密）；
+# 机密（GITHUB_TOKEN、TURNSTILE_SECRET_KEY）在仪表板「变量和密钥」用「密钥」类型配置。
 [vars]
 PUBLIC_SITE_URL = "https://aggregator-9w7.pages.dev"
+GITHUB_REPO = "lengzimu/aggregator"
+# 每窗口单 IP 最大 DMCA 提交数 / 窗口秒数（不配则默认 5 次 / 3600 秒）
+# RATE_LIMIT_MAX = "5"
+# RATE_LIMIT_WINDOW_SEC = "3600"
