@@ -2,15 +2,14 @@ name: Apply Takedown (China-side push)
 
 # 中国侧推送下架清单（data/takedowns/*.json）时立即处理，
 # 不再等待每日 20:00（北京时间）的 Daily Link Check，做到下架近实时生效。
-# 路径过滤：仅 data/takedowns/ 根目录的 json 触发；
-# archive/ 子目录（本脚本处理后移入的留痕文件）被 paths-ignore 排除，
-# 因此 bot 自身的提交不会再次触发本工作流，避免死循环。
+# 路径过滤用单层通配 data/takedowns/*.json（GitHub 的 * 不匹配目录分隔符 /，
+# 因此不会匹配 data/takedowns/archive/ 子目录）。本脚本把文件移入 archive/ 后
+# 的 bot 提交不再触发本工作流，避免死循环。
+# 注意：GitHub 不允许同一事件同时定义 paths 与 paths-ignore，故只保留 paths。
 on:
   push:
     paths:
-      - 'data/takedowns/**'
-    paths-ignore:
-      - 'data/takedowns/archive/**'
+      - 'data/takedowns/*.json'
   workflow_dispatch:
 
 permissions:
