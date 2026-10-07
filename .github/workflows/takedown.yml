@@ -1,0 +1,48 @@
+name: Apply Takedown (China-side push)
+
+# 中国侧推送下架清单（data/takedowns/*.json）时立即处理，
+# 不再等待每日 20:00（北京时间）的 Daily Link Check，做到下架近实时生效。
+# 路径过滤：仅 data/takedowns/ 根目录的 json 触发；
+# archive/ 子目录（本脚本处理后移入的留痕文件）被 paths-ignore 排除，
+# 因此 bot 自身的提交不会再次触发本工作流，避免死循环。
+on:
+  push:
+    paths:
+      - 'data/takedowns/**'
+    paths-ignore:
+      - 'data/takedowns/archive/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  takedown:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 仅使用 Node 内置模块，无需安装依赖
+      - name: Apply China-side takedown list
+        run: node scripts/apply-takedown.mjs
+
+      - name: Commit removals
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # -A 仅作用于指定路径；data/takedowns/ 若无任何待处理文件也容错
+          git add -A src/content removed data/takedowns 2>/dev/null || git add -A src/content removed
+          if git diff --staged --quiet; then
+            echo "No takedowns to apply."
+          else
+            git commit -m "chore: apply China-side takedown list (auto)"
+            git push
+          fi
