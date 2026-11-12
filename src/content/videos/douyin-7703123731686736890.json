@@ -1,0 +1,22 @@
+{
+    "title": "one two three～",
+    "creator": "Fån",
+    "platform": "抖音",
+    "sourceUrl": "https://www.douyin.com/video/7703123731686736890",
+    "coverUrl": "/covers/videos/douyin-7703123731686736890.jpg",
+    "language": "zh",
+    "tags": [
+        "other",
+        "治愈",
+        "解压",
+        "生活"
+    ],
+    "sourceId": "douyin:7703123731686736890",
+    "origin": "api",
+    "pubDate": "2026-11-11",
+    "review": "画面简洁明快，配合节奏感的旁白，捕捉生活中的微小瞬间，治愈又解压，让人忍不住跟着数下去。",
+    "metrics": {
+        "capturedAt": "2026-11-12",
+        "views": 0
+    }
+}
